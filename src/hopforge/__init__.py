@@ -17,11 +17,11 @@ from .topology import (berry_phase, zak_phase, polarization, wilson_loop, chern_
                        berry_curvature, berry_curvature_map, z2_invariant, z2_3d,
                        z2_from_wcc, winding_number, fu_kane_parity)
 from .kubo import hall_conductivity, anomalous_hall, spin_hall, orbital_hall
-from . import models, plotting, transport, kpm
+from . import models, plotting, transport, kpm, parallel
 from .continuum import discretize
 from .plotting import plot_bands, plot_dos, plot_lattice, plot_wcc, plot_kmap
 from .quiz import Quiz
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [n for n in dir() if not n.startswith("_")]

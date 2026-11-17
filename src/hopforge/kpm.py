@@ -108,11 +108,24 @@ def _reconstruct(S, mu, energies, kernel):
     return out
 
 
+def _moments_parallel(H, num_moments, num_vectors, operator, seed, bounds, n_jobs):
+    from .parallel import pmap, resolve_jobs
+    n = min(resolve_jobs(n_jobs), num_vectors)
+    if n <= 1:
+        return moments(H, num_moments, None, num_vectors, operator, seed, bounds)
+    bounds = bounds or spectral_bounds(H)
+    counts = np.array_split(np.arange(num_vectors), n)
+    res = pmap(lambda c: moments(H, num_moments, None, len(c), operator, seed * 1000 + int(c[0]),
+                                 bounds)[1], counts, n_jobs)
+    return _Scaled(H, bounds), np.concatenate(res, axis=1)
+
+
 def dos(H, energies=None, num_moments=300, num_vectors=10, seed=0, kernel="jackson",
-        operator=None, bounds=None):
+        operator=None, bounds=None, n_jobs=None):
     """KPM density of states (states per energy, integrates to the matrix
-    dimension). ``operator`` gives e.g. spin- or orbital-projected DOS."""
-    S, mu = moments(H, num_moments, None, num_vectors, operator, seed, bounds)
+    dimension). ``operator`` gives e.g. spin- or orbital-projected DOS.
+    Random vectors are distributed over ``n_jobs`` worker processes."""
+    S, mu = _moments_parallel(H, num_moments, num_vectors, operator, seed, bounds, n_jobs)
     if energies is None:
         energies = np.linspace(S.b - 0.98 * S.a, S.b + 0.98 * S.a, 800)
     energies = np.asarray(energies, float)
@@ -132,8 +145,23 @@ def ldos(H, sites, energies, num_moments=400, kernel="jackson", ns=1, bounds=Non
     return out.reshape(-1, ns, len(np.atleast_1d(energies))).sum(1)
 
 
+def _cond_moments(S, vx, vy, R, M):
+    def cheb_all(start):
+        out = np.empty((M,) + start.shape, complex)
+        out[0] = start
+        if M > 1:
+            out[1] = S(start)
+        for n in range(2, M):
+            out[n] = 2 * S(out[n - 1]) - out[n - 2]
+        return out
+    L = cheb_all(vx @ R)
+    Tn = cheb_all(R)
+    Rv = np.stack([vy @ Tn[n] for n in range(M)])
+    return np.einsum("nir,mir->nm", L.conj(), Rv)
+
+
 def conductivity(H, vx, vy, area, energies, num_moments=200, num_vectors=10, seed=0,
-                 kernel="jackson", kT=0.0, bounds=None, n_eps=4000, hall=None):
+                 kernel="jackson", kT=0.0, bounds=None, n_eps=4000, hall=None, n_jobs=None):
     """Kubo-Bastin conductivity sigma_xy(mu) by KPM (Garcia et al. 2015).
 
     H, vx, vy : sparse Hamiltonian and velocity operators (dH/dk_x, dH/dk_y),
@@ -153,21 +181,11 @@ def conductivity(H, vx, vy, area, energies, num_moments=200, num_vectors=10, see
     vx = sp.csr_matrix(vx) / S.a
     vy = sp.csr_matrix(vy) / S.a
 
-    def cheb_all(start):
-        out = np.empty((M,) + start.shape, complex)
-        out[0] = start
-        if M > 1:
-            out[1] = S(start)
-        for n in range(2, M):
-            out[n] = 2 * S(out[n - 1]) - out[n - 2]
-        return out
-
-    L = cheb_all(vx @ R)                         # T_m(H) vx r
-    Tn = cheb_all(R)                             # T_n(H) r
-    Rv = np.stack([vy @ Tn[n] for n in range(M)])  # vy T_n(H) r
-    # MU[n, m] = Tr[vx T_n vy T_m] = sum_r <T_n vx r | vy T_m r>  (verified
-    # against exact diagonalisation + Kubo formula in tests/test_transport.py)
-    MU = np.einsum("nir,mir->nm", L.conj(), Rv) / num_vectors
+    from .parallel import pmap, resolve_jobs
+    nw = min(resolve_jobs(n_jobs), num_vectors)
+    cols = np.array_split(np.arange(num_vectors), nw)
+    parts = pmap(lambda c: _cond_moments(S, vx, vy, R[:, c], M), cols, n_jobs)
+    MU = sum(parts) / num_vectors
     # exact identities: MU is Hermitian, and for a Hall response (vx != vy)
     # only the antisymmetric part survives (sigma_yx = -sigma_xy uses MU^T).
     # Projecting the stochastic estimate onto them removes most of the noise.

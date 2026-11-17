@@ -141,13 +141,20 @@ class DOS:
     pdos: dict
 
 
-def dos(model, nk=60, energies=None, sigma=0.05, projections=None, ne=600):
+def _eig_parallel(model, k, n_jobs):
+    from .parallel import pmap, split, chunks_for
+    parts = split(k, chunks_for(len(k), n_jobs))
+    res = pmap(lambda kk: model.eig(kk), parts, n_jobs)
+    return np.concatenate([r[0] for r in res]), np.concatenate([r[1] for r in res])
+
+
+def dos(model, nk=60, energies=None, sigma=0.05, projections=None, ne=600, n_jobs=None):
     """Gaussian-broadened density of states per unit cell (states / energy).
 
     ``projections`` : dict ``{label: orbitals}`` for projected DOS.
     """
     k = kmesh(model, nk)
-    E, V = model.eig(k)
+    E, V = _eig_parallel(model, k, n_jobs)
     if energies is None:
         lo, hi = E.min(), E.max()
         pad = 5 * sigma + 0.05 * (hi - lo + 1e-9)

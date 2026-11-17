@@ -1,12 +1,14 @@
 """Scattering solver: Green's functions, transmissions (Caroli / Fisher-Lee),
-multi-terminal conductance matrices, LDOS, scattering wavefunctions and
-bond currents.
+transmission eigenvalues and shot noise, multi-terminal conductance matrices,
+LDOS, scattering wavefunctions and bond currents.
 
     G^r(E) = [ (E + i eta) - H_S - sum_l Sigma_l(E) ]^{-1}
     Gamma_l = i (Sigma_l - Sigma_l^dag)
     T_{ij}  = Tr[ Gamma_i G^r Gamma_j G^a ]        (from lead j to lead i)
 
 Transmissions are in units of e^2/h per spin-resolved channel (no factor 2).
+Sweeps over energies, parameters and disorder realisations run in parallel
+with ``n_jobs`` worker processes (see :mod:`hopforge.parallel`).
 """
 from __future__ import annotations
 
@@ -14,42 +16,39 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-
-def _pad(W, n):
-    if W.shape[0] == n:
-        return W
-    return sp.vstack([W, sp.csr_matrix((n - W.shape[0], W.shape[1]))]).tocsr()
+from ..parallel import pmap
 
 
 class SMatrix:
-    """Scattering quantities at one energy. Create with ``system.smatrix(E)``."""
+    """Scattering quantities at one energy. Create with ``system.smatrix(E, params)``."""
 
-    def __init__(self, system, energy, eta=1e-10, lead_eta=1e-10):
+    def __init__(self, system, energy, params=None, eta=1e-10, lead_eta=1e-10):
         if not system.leads:
             raise ValueError("attach at least one lead first")
         self.sys = system
         self.energy = float(energy)
-        H = system.hamiltonian()
+        self.params = params
+        H = system.hamiltonian(params)
         N = system.nbasis
         A = (energy + 1j * eta) * sp.identity(N, dtype=complex, format="csr") - H
         self.Sigma, self.Gamma, self.iface = [], [], []
-        Sig_total = sp.csr_matrix((N, N), dtype=complex)
+        rows, cols, vals = [], [], []
         for L in system.leads:
-            L.W = _pad(L.W, N)
-            S = L.self_energy(energy, eta=lead_eta)
-            idx = L.iface
+            idx = L.matrices(params)[3]
+            S = L.self_energy(energy, params, eta=lead_eta)
             self.Sigma.append(S)
             self.Gamma.append(1j * (S - S.conj().T))
             self.iface.append(idx)
             r, c = np.meshgrid(idx, idx, indexing="ij")
-            Sig_total = Sig_total + sp.csr_matrix((S.ravel(), (r.ravel(), c.ravel())), shape=(N, N))
-        self.A = (A - Sig_total).tocsc()
+            rows.append(r.ravel()); cols.append(c.ravel()); vals.append(S.ravel())
+        Sig = sp.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                            shape=(N, N))
+        self.A = (A - Sig).tocsc()
         self.lu = spla.splu(self.A)
         self._cols = {}
 
     # -------------------------------------------------------------------
     def _G_cols(self, lead):
-        """Columns of G^r on the interface of ``lead``: shape (N, n_iface)."""
         if lead not in self._cols:
             idx = self.iface[lead]
             B = np.zeros((self.A.shape[0], len(idx)), complex)
@@ -64,24 +63,26 @@ class SMatrix:
     def _block(self, lead, block):
         if block is None:
             return None
-        m = self.sys.mask(**block)
-        return m[self.iface[lead]]
+        return self.sys.mask(**block)[self.iface[lead]]
 
     def num_modes(self, lead, block=None):
         P = None
         if block is not None:
             P = np.diag(self.sys.lead_mask(lead, **block).astype(float))
-        return self.sys.leads[lead].num_modes(self.energy, P)
+        return self.sys.leads[lead].num_modes(self.energy, P, self.params)
+
+    def lead_modes(self, lead):
+        """(k, velocity, wavefunctions) of the propagating modes of a lead."""
+        return self.sys.leads[lead].modes(self.energy, None, self.params)
 
     def transmission(self, to_lead, from_lead, to_block=None, from_block=None):
         """Transmission probability from ``from_lead`` to ``to_lead``.
 
         ``*_block`` select a conserved sub-block, e.g. ``dict(spin='up')`` or
-        ``dict(orbitals=['h'])`` (holes of a BdG model). For the same lead and
+        ``dict(orbitals=['A_h'])`` (holes of a BdG model). For the same lead and
         same block the reflection probability is returned (from unitarity).
         """
-        same = to_lead == from_lead and (to_block == from_block)
-        if same:
+        if to_lead == from_lead and to_block == from_block:
             Nf = self.num_modes(from_lead, from_block)
             out = 0.0
             for i in range(len(self.sys.leads)):
@@ -104,9 +105,37 @@ class SMatrix:
             Gj = Gj * np.outer(mj, mj)
         return float(np.real(np.trace(Gi @ G @ Gj @ G.conj().T)))
 
+    # -------------------------------------------------------------------
+    @staticmethod
+    def _sqrt_psd(M, tol=1e-12):
+        w, U = np.linalg.eigh(0.5 * (M + M.conj().T))
+        w = np.clip(w, 0, None)
+        keep = w > tol * max(w.max(), 1e-300)
+        return U[:, keep] * np.sqrt(w[keep])
+
+    def transmission_matrix(self, to_lead, from_lead):
+        """t = Gamma_to^{1/2} G^r Gamma_from^{1/2} in the channel spaces of the
+        two leads (unitarily equivalent to the mode-basis block of S: same
+        singular values, T = Tr t t^dag)."""
+        Ai = self._sqrt_psd(self.Gamma[to_lead])
+        Aj = self._sqrt_psd(self.Gamma[from_lead])
+        return Ai.conj().T @ self.greens(to_lead, from_lead) @ Aj
+
+    def transmission_eigenvalues(self, to_lead=1, from_lead=0):
+        """Transmission eigenvalues tau_n in [0, 1], descending."""
+        s = np.linalg.svd(self.transmission_matrix(to_lead, from_lead), compute_uv=False)
+        return np.clip(s ** 2, 0, 1)
+
+    def shot_noise(self, to_lead=1, from_lead=0):
+        """Zero-temperature shot noise (S, F): S = sum tau (1 - tau) in units of
+        2 e^3 |V| / h and the Fano factor F = S / sum tau."""
+        tau = self.transmission_eigenvalues(to_lead, from_lead)
+        S, T = float(np.sum(tau * (1 - tau))), float(np.sum(tau))
+        return S, (S / T if T > 1e-14 else np.nan)
+
+    # -------------------------------------------------------------------
     def conductance_matrix(self):
-        """Multi-terminal conductance matrix (e^2/h): I_i = sum_j G_ij V_j with
-        G_ij = -T_ij (i != j), G_ii = N_i - R_ii. Rows/columns sum to zero."""
+        """Multi-terminal conductance matrix (e^2/h): I_i = sum_j G_ij V_j."""
         n = len(self.sys.leads)
         G = np.zeros((n, n))
         for i in range(n):
@@ -114,19 +143,17 @@ class SMatrix:
                 if i != j:
                     G[i, j] = -self.transmission(i, j)
         for i in range(n):
-            G[i, i] = -G[:, i].sum() + 0.0
+            G[i, i] = -G[:, i].sum()
         return G
 
     def four_terminal_resistance(self, current_in, current_out, v_plus, v_minus):
-        """R = (V_plus - V_minus) / I with current I injected at ``current_in``
-        and extracted at ``current_out`` (units of h/e^2)."""
+        """R = (V_plus - V_minus) / I, current from ``current_in`` to
+        ``current_out`` (units of h/e^2)."""
         G = self.conductance_matrix()
         n = G.shape[0]
-        ground = current_out
-        keep = [k for k in range(n) if k != ground]
+        keep = [k for k in range(n) if k != current_out]
         I = np.zeros(n)
-        I[current_in] = 1.0
-        I[current_out] = -1.0
+        I[current_in], I[current_out] = 1.0, -1.0
         V = np.zeros(n)
         V[keep] = np.linalg.lstsq(G[np.ix_(keep, keep)], I[keep], rcond=None)[0]
         return V[v_plus] - V[v_minus]
@@ -145,70 +172,109 @@ class SMatrix:
         return out
 
     def wavefunctions(self, lead, tol=1e-10):
-        """Scattering states injected from ``lead``: columns psi_n with
-        sum_n psi_n psi_n^dag = G Gamma_lead G^dag (the lead spectral function)."""
+        """Scattering states injected from ``lead``:
+        sum_n psi_n psi_n^dag = G Gamma_lead G^dag."""
         g, U = np.linalg.eigh(self.Gamma[lead])
         keep = g > tol * max(g.max(), 1e-300)
         return self._G_cols(lead) @ (U[:, keep] * np.sqrt(g[keep]))
 
-    def density(self, lead, per_site=True):
-        """Electron density injected from ``lead`` per unit energy:
-        diag(G Gamma G^dag) / 2 pi (summed over internal dof if per_site)."""
+    def density(self, lead, per_site=True, operator=None):
+        """Density injected from ``lead`` per unit energy; ``operator`` (ns x ns)
+        gives e.g. a spin density."""
         psi = self.wavefunctions(lead)
-        rho = (np.abs(psi) ** 2).sum(1) / (2 * np.pi)
-        if per_site:
-            return rho.reshape(-1, self.sys.ns).sum(1)
-        return rho
+        ns = self.sys.ns
+        if operator is None:
+            rho = (np.abs(psi) ** 2).sum(1) / (2 * np.pi)
+            return rho.reshape(-1, ns).sum(1) if per_site else rho
+        P = psi.reshape(-1, ns, psi.shape[1])
+        return np.einsum("sim,ij,sjm->s", P.conj(), np.asarray(operator), P).real / (2 * np.pi)
 
-    def current(self, lead, operator=None):
-        """Bond currents carried by the states injected from ``lead``,
-        normalised so that the total current through any cross-section equals
-        the transmission out of that lead (i.e. units of e/h per unit energy).
-        Returns (bonds, J): bonds is an (nb, 2) array of site indices (a, b)
-        and J the current from a to b. ``operator`` (ns x ns) gives e.g. spin
-        currents (default: charge)."""
+    def current(self, lead, operator=None, where=None):
+        """Bond currents from ``lead`` (sum over any cross-section = transmission).
+        Returns (bonds (nb, 2), J). ``operator`` (ns x ns) for spin currents,
+        ``where(pos_a, pos_b) -> bool`` to restrict bonds."""
         psi = self.wavefunctions(lead)
-        H = self.sys.hamiltonian().tocoo()
+        Hd = self.sys.hamiltonian(self.params).tocsr()
+        H = Hd.tocoo()
         ns = self.sys.ns
         Op = np.eye(ns) if operator is None else np.asarray(operator)
         a_site, b_site = H.row // ns, H.col // ns
         mask = a_site < b_site
         pairs = np.unique(np.stack([a_site[mask], b_site[mask]], 1), axis=0)
-        Hd = self.sys.hamiltonian().tocsr()
+        if where is not None:
+            P = self.sys.positions()
+            pairs = np.array([p for p in pairs if where(P[p[0]], P[p[1]])], int).reshape(-1, 2)
         J = np.zeros(len(pairs))
         for n, (a, b) in enumerate(pairs):
-            Hab = Hd[a * ns:(a + 1) * ns, b * ns:(b + 1) * ns].toarray()
+            Hba = Hd[a * ns:(a + 1) * ns, b * ns:(b + 1) * ns].toarray().conj().T
             pa, pb = psi[a * ns:(a + 1) * ns], psi[b * ns:(b + 1) * ns]
-            # J_{a->b} = sum_modes 2 Im( psi_b^dag  (O H_ba + H_ba O)/2  psi_a ) / (2 pi)
-            Hba = Hab.conj().T
             M = 0.5 * (Op @ Hba + Hba @ Op)
             J[n] = np.sum(2 * np.imag(np.einsum("im,ij,jm->m", pb.conj(), M, pa)))
         return pairs, J
 
 
-def smatrix(system, energy, **kw):
+def smatrix(system, energy, params=None, **kw):
     """Solve the scattering problem at one energy."""
-    return SMatrix(system, energy, **kw)
+    return SMatrix(system, energy, params=params, **kw)
 
 
-def conductance(system, energies, to_lead=1, from_lead=0, **kw):
-    """Transmission T(E) between two leads for an array of energies."""
+def conductance(system, energies, to_lead=1, from_lead=0, params=None, n_jobs=None, **kw):
+    """T(E) between two leads, parallel over energies."""
     energies = np.atleast_1d(energies)
-    return np.array([SMatrix(system, E).transmission(to_lead, from_lead, **kw) for E in energies])
+    f = lambda E: SMatrix(system, E, params=params).transmission(to_lead, from_lead, **kw)
+    return np.array(pmap(f, energies, n_jobs))
 
 
-def andreev_conductance(system, energies, normal_lead=0, electron=None, hole=None):
-    """Conductance of a normal-superconductor junction (BdG model), Blonder-
-    Tinkham-Klapwijk form G = N_e - R_ee + R_he = T_(S<-e) + 2 R_he (e^2/h).
+def sweep(system, func, energies=None, params_list=None, n_jobs=None):
+    """Parallel sweep of ``func(smatrix)`` over energies and/or parameter sets.
+    Returns a flat list (one parameter set) or a list per parameter set."""
+    energies = [0.0] if energies is None else list(np.atleast_1d(energies))
+    params_list = [None] if params_list is None else list(params_list)
+    jobs = [(E, p) for p in params_list for E in energies]
+    out = pmap(lambda job: func(SMatrix(system, job[0], params=job[1])), jobs, n_jobs)
+    if len(params_list) == 1:
+        return out
+    n = len(energies)
+    return [out[i * n:(i + 1) * n] for i in range(len(params_list))]
 
-    ``electron`` / ``hole`` are block specs, e.g. dict(orbitals=['e']) and
-    dict(orbitals=['h'])."""
+
+def disorder_average(make_system, seeds, energies, to_lead=1, from_lead=0, n_jobs=None, log=False):
+    """Mean and std of T(E) (or ln T) over disorder realisations, in parallel.
+    ``make_system(seed)`` returns a System with leads attached."""
     energies = np.atleast_1d(energies)
-    out = []
-    for E in energies:
-        S = SMatrix(system, E)
+
+    def one(seed):
+        s = make_system(seed)
+        T = np.array([SMatrix(s, E).transmission(to_lead, from_lead) for E in energies])
+        return np.log(np.clip(T, 1e-300, None)) if log else T
+    res = np.array(pmap(one, list(seeds), n_jobs))
+    return res.mean(0), res.std(0)
+
+
+def andreev_conductance(system, energies, normal_lead=0, electron=None, hole=None, params=None,
+                        n_jobs=None):
+    """NS-junction conductance (BdG), BTK form G = N_e - R_ee + R_he (e^2/h);
+    parallel over energies. ``electron``/``hole`` are block specs such as
+    dict(orbitals=['A_e']) / dict(orbitals=['A_h'])."""
+    energies = np.atleast_1d(energies)
+
+    def one(E):
+        S = SMatrix(system, E, params=params)
         Ree = S.transmission(normal_lead, normal_lead, electron, electron)
         Rhe = S.transmission(normal_lead, normal_lead, hole, electron)
-        Ne = S.num_modes(normal_lead, electron)
-        out.append(Ne - Ree + Rhe)
-    return np.array(out)
+        return S.num_modes(normal_lead, electron) - Ree + Rhe
+    return np.array(pmap(one, energies, n_jobs))
+
+
+def spectrum(system, params_list=None, k=10, sigma=0.0, n_jobs=None, dense=None):
+    """Eigenvalues of the closed scattering region (leads ignored) for each
+    parameter set (like kwant.plotter.spectrum). Dense for <= 2000 states,
+    otherwise the ``k`` eigenvalues closest to ``sigma``. Parallel."""
+    params_list = [None] if params_list is None else list(params_list)
+
+    def one(p):
+        H = system.hamiltonian(p)
+        if (dense if dense is not None else H.shape[0] <= 2000):
+            return np.linalg.eigvalsh(H.toarray())
+        return np.sort(spla.eigsh(H, k=k, sigma=sigma, return_eigenvectors=False).real)
+    return pmap(one, params_list, n_jobs)

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .solvers import kmesh
+from .solvers import kmesh, _eig_parallel
+from .parallel import pmap
 
 
 def _bands_sel(model, occ):
@@ -87,7 +88,7 @@ def polarization(model, occ=None, nk=200):
 
 
 def wilson_loop(model, occ, direction=0, scan=None, nk=100, nscan=51, fixed=None,
-                scan_range=(0.0, 1.0)):
+                scan_range=(0.0, 1.0), n_jobs=None):
     """Hybrid Wannier charge centres (WCC) along ``direction`` as a function of
     the momentum along ``scan``.
 
@@ -107,8 +108,8 @@ def wilson_loop(model, occ, direction=0, scan=None, nk=100, nscan=51, fixed=None
     G = np.zeros(dim)
     G[direction] = 1
     kscan = np.linspace(scan_range[0], scan_range[1], nscan)
-    out = []
-    for ks in kscan:
+
+    def one(ks):
         k0 = np.zeros(dim)
         k0[scan] = ks
         for ax, val in fixed.items():
@@ -116,11 +117,12 @@ def wilson_loop(model, occ, direction=0, scan=None, nk=100, nscan=51, fixed=None
         V, Vend = _loop_states(model, occ, k0, G, nk)
         W = _wilson_matrix(V, Vend)
         ph = -np.angle(np.linalg.eigvals(W)) / (2 * np.pi)
-        out.append(np.sort(ph % 1.0))
+        return np.sort(ph % 1.0)
+    out = pmap(one, kscan, n_jobs, chunksize=max(1, nscan // 64))
     return kscan, np.array(out)
 
 
-def chern_number(model, occ, nk=60, plane=(0, 1), fixed=None):
+def chern_number(model, occ, nk=60, plane=(0, 1), fixed=None, n_jobs=None):
     """Chern number of the occupied bands by the Fukui-Hatsugai-Suzuki
     lattice method (exactly integer for a fine enough mesh)."""
     dim = model.dim
@@ -134,7 +136,13 @@ def chern_number(model, occ, nk=60, plane=(0, 1), fixed=None):
     k[..., a], k[..., b] = g1, g2
     for ax, val in (fixed or {}).items():
         k[..., ax] = val
-    _, V = model.eig(k.reshape(-1, dim), gauge="periodic")
+    kf = k.reshape(-1, dim)
+    if n_jobs is None or n_jobs == 1:
+        _, V = model.eig(kf, gauge="periodic")
+    else:
+        from .parallel import split, chunks_for
+        parts = split(kf, chunks_for(len(kf), n_jobs))
+        V = np.concatenate(pmap(lambda kk: model.eig(kk, gauge="periodic")[1], parts, n_jobs))
     V = V[:, :, sel].reshape(n1, n2, model.nbands, len(sel))
 
     def link(Va, Vb):
@@ -149,16 +157,17 @@ def chern_number(model, occ, nk=60, plane=(0, 1), fixed=None):
     return float(-F.sum() / (2 * np.pi))
 
 
-def berry_curvature(model, k, occ=None, mu=None, component="xy", eta=0.0, per_band=False):
+def berry_curvature(model, k, occ=None, mu=None, component="xy", eta=0.0, per_band=False,
+                    n_jobs=None):
     """Berry curvature Omega^{ab} at k-points (Kubo formula).
 
     Returns the sum over occupied bands (``occ`` or all states below ``mu``)
     with shape (nk,), or the per-band values (nk, nb) if ``per_band=True``.
     """
-    from .kubo import _band_resolved
+    from .kubo import _band_resolved_parallel
     a, b = _comp(component)
     k = np.atleast_2d(np.asarray(k, float)) if model.dim > 1 else np.asarray(k, float).reshape(-1, 1)
-    E, Om = _band_resolved(model, k, a, b, None, eta)
+    E, Om = _band_resolved_parallel(model, k, a, b, None, eta, n_jobs)
     if per_band:
         return Om
     if mu is not None:
@@ -167,7 +176,8 @@ def berry_curvature(model, k, occ=None, mu=None, component="xy", eta=0.0, per_ba
     return Om[:, sel].sum(1)
 
 
-def berry_curvature_map(model, occ=None, nk=60, plane=(0, 1), fixed=None, mu=None, component="xy"):
+def berry_curvature_map(model, occ=None, nk=60, plane=(0, 1), fixed=None, mu=None, component="xy",
+                        n_jobs=None):
     """Berry curvature on an nk x nk grid of the reduced plane; returns
     (k1, k2, Omega) ready for plotting.plot_kmap."""
     dim = model.dim
@@ -177,7 +187,8 @@ def berry_curvature_map(model, occ=None, nk=60, plane=(0, 1), fixed=None, mu=Non
     k[..., plane[0]], k[..., plane[1]] = G1, G2
     for ax, val in (fixed or {}).items():
         k[..., ax] = val
-    Om = berry_curvature(model, k.reshape(-1, dim), occ=occ, mu=mu, component=component)
+    Om = berry_curvature(model, k.reshape(-1, dim), occ=occ, mu=mu, component=component,
+                         n_jobs=n_jobs)
     return G1, G2, Om.reshape(nk, nk)
 
 
@@ -213,24 +224,26 @@ def z2_from_wcc(wcc):
     return count % 2
 
 
-def z2_invariant(model, occ, direction=0, nk=100, nscan=101, fixed=None, scan=None):
+def z2_invariant(model, occ, direction=0, nk=100, nscan=101, fixed=None, scan=None, n_jobs=None):
     """Z2 invariant of a time-reversal-invariant 2D model (or of one
     TRS-invariant plane of a 3D model, chosen with ``fixed``)."""
-    _, wcc = wilson_loop(model, occ, direction, scan, nk, nscan, fixed, (0.0, 0.5))
+    _, wcc = wilson_loop(model, occ, direction, scan, nk, nscan, fixed, (0.0, 0.5), n_jobs)
     return z2_from_wcc(wcc)
 
 
-def z2_3d(model, occ, nk=60, nscan=61):
+def z2_3d(model, occ, nk=60, nscan=61, n_jobs=None):
     """Strong and weak Z2 indices (nu0; nu1 nu2 nu3) of a 3D TRS model from
     the six TRS-invariant planes k_i = 0 and k_i = 1/2."""
     if model.dim != 3:
         raise ValueError("z2_3d needs a 3D model")
-    z = {}
-    for i in range(3):
+    planes = [(i, val) for i in range(3) for val in (0.0, 0.5)]
+
+    def one(pl):
+        i, val = pl
         others = [a for a in range(3) if a != i]
-        for val in (0.0, 0.5):
-            z[(i, val)] = z2_invariant(model, occ, direction=others[0], scan=others[1], nk=nk,
-                                       nscan=nscan, fixed={i: val})
+        return z2_invariant(model, occ, direction=others[0], scan=others[1], nk=nk,
+                            nscan=nscan, fixed={i: val})
+    z = dict(zip(planes, pmap(one, planes, n_jobs)))
     nu0 = (z[(0, 0.0)] + z[(0, 0.5)]) % 2
     weak = tuple(z[(i, 0.5)] for i in range(3))
     return (nu0,) + weak

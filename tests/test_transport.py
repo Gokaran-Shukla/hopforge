@@ -135,3 +135,49 @@ def test_continuum_discretizer():
           "A*(k_x*tau_x*sigma_x + k_y*tau_x*sigma_y + k_z*tau_x*sigma_z)")
     mt = hf.discretize(ti, "xyz", 1.0, dict(M0=1.0, B=0.5, A=1.0))
     assert hf.z2_3d(mt, 2, nk=20, nscan=21) == (1, 0, 0, 0)
+
+
+# ---------------------------------------------------------------- v0.3 features
+def test_params_shot_noise_and_parallel():
+    s = tr.System(M.square(), lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 8,
+                  onsite=lambda r, n, V: V if 8 <= r[0] < 12 else 0.0)
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    # ballistic: integer T, zero Fano factor
+    S = s.smatrix(-3.2, params=dict(V=0.0))
+    assert np.isclose(S.transmission(1, 0), S.num_modes(0), atol=1e-6)
+    assert S.shot_noise()[1] < 1e-6
+    # tunnel barrier: Fano -> 1
+    assert s.smatrix(-3.2, params=dict(V=3.0)).shot_noise()[1] > 0.99
+    # parameters change the answer, parallel == serial
+    Es = np.linspace(-3.9, -1.0, 12)
+    a = s.conductance(Es, params=dict(V=0.5), n_jobs=1)
+    b = s.conductance(Es, params=dict(V=0.5), n_jobs=2)
+    assert np.allclose(a, b)
+    with pytest.raises(TypeError):
+        s.hamiltonian()          # V is required
+
+
+def test_diffusive_fano_one_third():
+    def make(seed):
+        d = tr.System(M.square(), lambda r: 0 <= r[0] < 60 and 0 <= r[1] < 30,
+                      onsite=tr.anderson(1.6, seed=seed))
+        d.attach_lead((-1, 0)); d.attach_lead((1, 0))
+        return d
+    F = np.mean([make(sd).smatrix(-1.0).shot_noise()[1] for sd in range(6)])
+    assert 0.25 < F < 0.42
+
+
+def test_field_gauge_equals_landau():
+    B = 2 * np.pi * 0.05
+    g1, g2 = tr.landau_gauge(B, "x"), tr.field_gauge(lambda x, y: B, "x")
+    for ri, rj in [((1, 2), (2, 2.5)), ((0.3, -1), (0.3, 4))]:
+        assert np.isclose(g1(np.array(ri), np.array(rj)), g2(np.array(ri), np.array(rj)))
+
+
+def test_parallel_k_space_equals_serial():
+    h = M.haldane()
+    a = hf.anomalous_hall(h, [0.0, 1.0], 40, n_jobs=1).sigma
+    b = hf.anomalous_hall(h, [0.0, 1.0], 40, n_jobs=2).sigma
+    assert np.allclose(a, b)
+    assert hf.z2_3d(M.wilson_dirac_ti(), 2, nk=20, nscan=21, n_jobs=2) == (1, 0, 0, 0)
+    assert np.isclose(hf.chern_number(h, 1, 30, n_jobs=2), 1.0)

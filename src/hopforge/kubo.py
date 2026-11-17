@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .solvers import kmesh
+from .parallel import pmap, split, chunks_for
 
 E2_HBAR_SI = 2.434134807e-4  # e^2 / hbar in Siemens
 
@@ -74,8 +75,14 @@ class HallResult:
         return f"HallResult({self.operator}, {self.component}, {self.sigma.size} chemical potentials, [{self.units}])"
 
 
+def _band_resolved_parallel(model, k, a, b, O, eta, n_jobs):
+    parts = split(k, chunks_for(len(k), n_jobs))
+    res = pmap(lambda kk: _band_resolved(model, kk, a, b, O, eta), parts, n_jobs)
+    return np.concatenate([r[0] for r in res]), np.concatenate([r[1] for r in res])
+
+
 def hall_conductivity(model, mu=0.0, nk=100, operator=None, component="xy", eta=0.0, kT=0.0,
-                      op_name=None, length_unit_angstrom=True):
+                      op_name=None, length_unit_angstrom=True, n_jobs=None):
     """Intrinsic Hall-type conductivity on a uniform k mesh.
 
     Parameters
@@ -87,6 +94,7 @@ def hall_conductivity(model, mu=0.0, nk=100, operator=None, component="xy", eta=
     component : 'xy', 'yz', ... -> current along the first, field along the second.
     eta : broadening in the energy denominators (0 = exact, degeneracies skipped)
     kT  : temperature (energy units) in the Fermi function
+    n_jobs : worker processes for the k-mesh (-1 = all cores of the node)
     """
     dim = model.dim
     if dim < 2:
@@ -94,7 +102,7 @@ def hall_conductivity(model, mu=0.0, nk=100, operator=None, component="xy", eta=
     m = {"x": 0, "y": 1, "z": 2}
     a, b = m[component[0]], m[component[1]]
     k = kmesh(model, nk)
-    E, Om = _band_resolved(model, k, a, b, operator, eta)
+    E, Om = _band_resolved_parallel(model, k, a, b, operator, eta, n_jobs)
     mus = np.atleast_1d(np.asarray(mu, float))
     vol = model.lat.cell_volume
     vals = np.array([(Om * _fermi(E, u, kT)).sum(1).mean() for u in mus])
