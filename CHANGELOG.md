@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.6.0
+* Tutorials 17-20 (step-by-step model building, orbitronics/moiré bilayers, interacting phase diagrams, research models) with quizzes 17-20.
+* Fix: `moire.bilayer` now keeps one label per atom, so orbital angular momentum operators work on bilayers.
 * Strongly correlated systems: ED for Hubbard / extended Hubbard / Kanamori, spinless fermions (FCI), spin-1/2 XXZ / J1-J2, general Pauli-string models (TFIM, Kitaev honeycomb), SYK, Bose-Hubbard mean field; Lanczos Green functions.
 * Quantum phases: Hubbard phase diagrams vs U and doping, critical scans (Binder, fidelity, entanglement, central charge), Mott lobes, topological phase maps.
 * Bernevig/Vishwanath models: BBH quadrupole + nested Wilson loops, p+ip, type-II Weyl, flat Chern band, Bistritzer-MacDonald / chiral TBG magic angles.

@@ -157,7 +157,7 @@ def test_orbital_hall_finite():
 
 # ---------------------------------------------------------------- quiz
 def test_quizzes():
-    for k in range(1, 17):
+    for k in range(1, 21):
         q = hf.Quiz(k)
         assert len(q) == 20
         assert q.check(q.answer_key(), show_explanations=False) == 20

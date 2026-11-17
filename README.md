@@ -3,8 +3,8 @@
 **A universal tight-binding engine: from 1D chains to 3D crystals and Wannier90 models.**
 
 [![tests](https://github.com/Gokaran-Shukla/hopforge/actions/workflows/tests.yml/badge.svg)](https://github.com/Gokaran-Shukla/hopforge/actions)
-![benchmarks](https://img.shields.io/badge/published%20benchmarks-37%2F37-brightgreen)
-![tutorials](https://img.shields.io/badge/tutorials-16%20notebooks%20%2B%20320%20quiz%20questions-blue)
+![benchmarks](https://img.shields.io/badge/published%20benchmarks-59%2F59-brightgreen)
+![tutorials](https://img.shields.io/badge/tutorials-20%20notebooks%20%2B%20400%20quiz%20questions-blue)
 
 hopforge builds **any** tight-binding Hamiltonian in a few lines: any lattice, orbitals, spin,
 spin-orbit coupling, magnetism, Slater-Koster s/p/d bonding, a k·p model to discretise, or a
@@ -12,7 +12,7 @@ DFT Wannier90 model. Every tool works on all of them:
 
 | Area | What you get |
 |---|---|
-| **Models** | `Lattice`/`Model` engine (0D–3D, spinful, matrix hoppings), 29 published models, Slater-Koster s/p/d, BdG builder, `make_spinful`, `register_model` for community models |
+| **Models** | `Lattice`/`Model` engine (0D–3D, spinful, matrix hoppings), 40+ published models (incl. Bernevig, Vishwanath, Sachdev groups), Slater-Koster s/p/d, BdG builder, `make_spinful`, `register_model` for community models |
 | **DFT interface** | Wannier90 `hr.dat` / `tb.dat` / centres / `.win`, POSCAR, `hr.dat` export |
 | **Spectra** | Bands with operator weights, DOS/PDOS, Fermi level, supercells, ribbons, slabs, flakes, disorder, vacancies, Peierls fields |
 | **Topology** | Berry phase, Zak, polarisation, Berry curvature, Chern (FHS), Wilson loops/WCC, 2D and 3D Z2, Fu-Kane parity, winding numbers |
@@ -21,10 +21,13 @@ DFT Wannier90 model. Every tool works on all of them:
 | **Large scale** | Sparse Hamiltonians; KPM DOS/LDOS/projected DOS; Kubo-Bastin conductivity (with symmetry-projected noise reduction) |
 | **Surfaces** | WannierTools-style surface/bulk spectral functions, spin-resolved spectra, Fermi-arc maps |
 | **Many-body / driven** | Self-consistent mean-field Hubbard (collinear and noncollinear); Floquet (exact Sambe space and high-frequency effective models, usable with all topology tools) |
+| **Strong correlations** | Exact diagonalisation: Hubbard / extended Hubbard / Kanamori, spinless fermions (fractional Chern insulators), XXZ / J1-J2, Pauli-string models (transverse-field Ising, Kitaev honeycomb), SYK; Lanczos Green functions; Bose-Hubbard mean field |
+| **Quantum phases** | Hubbard phase diagrams vs U and doping (PM/FM/AFM), Stoner criterion, Binder cumulants, fidelity susceptibility, entanglement and central charge, Mott lobes, topological phase maps |
+| **Moiré & orbitronics** | Bistritzer-MacDonald and chiral TBG magic angles; real-space twisted/stacked bilayers with orbital and spin-frame rotation; layer-resolved Kubo-Středa responses; spin-orbit, orbital and self torques (torkance) |
 | **Continuum** | `hf.discretize("k_x**2 + ... sigma_x ...")`: k·p → tight binding |
 | **Parallel** | `n_jobs=40` on any sweep, k-mesh, Wilson loop, disorder average or KPM run; one BLAS thread per worker; SLURM example included |
-| **Validation** | 37 benchmarks against published results ([BENCHMARKS.md](BENCHMARKS.md)) and 87 tests |
-| **Learning** | 16 executed tutorial notebooks, each followed by a 20-question quiz (320 questions) |
+| **Validation** | 59 benchmarks against published results ([BENCHMARKS.md](BENCHMARKS.md)) and 110 tests |
+| **Learning** | 20 executed tutorial notebooks (four of them step-by-step "build your own Hamiltonian" walkthroughs), each followed by a 20-question quiz (400 questions) |
 
 ![neighbour shells](docs/img/lattice_shells.png)
 
@@ -34,8 +37,8 @@ DFT Wannier90 model. Every tool works on all of them:
 git clone https://github.com/Gokaran-Shukla/hopforge
 cd hopforge
 pip install -e ".[notebooks,test]"
-pytest -q                          # 87 tests
-python -m hopforge.benchmarks -j -1   # 37 published results
+pytest -q                          # 110 tests
+python -m hopforge.benchmarks -j -1   # 59 published results
 ```
 
 ## Quick tour
@@ -127,6 +130,10 @@ with references and deviations is in [BENCHMARKS.md](BENCHMARKS.md). The suite a
 | [14](tutorials/14_boltzmann_thermoelectric_edelstein.ipynb) | Boltzmann transport, thermoelectrics, Edelstein |
 | [15](tutorials/15_nonlinear_hall_orbital_optical.ipynb) | Berry curvature dipole, orbital magnetism, optics |
 | [16](tutorials/16_meanfield_hubbard_and_floquet.ipynb) | Mean-field Hubbard, Floquet engineering |
+| [17](tutorials/17_step_by_step_build_a_new_hamiltonian.ipynb) | **Step by step:** build a new model from a paper (Weeks-Franz Lieb TI): lattice, shells, SOC, symmetry checks, bands, Z2, edges, transport, phase diagram, registering it |
+| [18](tutorials/18_step_by_step_orbitronics_bilayers_moire.ipynb) | **Step by step:** orbital/spin Hall layers, FM/light-metal bilayer, layer-resolved Edelstein, SOT / orbital torque / self-torque, twisted magnetic bilayer |
+| [19](tutorials/19_step_by_step_interacting_hamiltonians_phase_diagrams.ipynb) | **Step by step:** interacting Hamiltonians: ED, correlations, gaps, spectral functions, doping, U-doping phase diagram, quantum criticality, Mott lobes |
+| [20](tutorials/20_reproduce_research_models_bernevig_vishwanath_sachdev.ipynb) | Reproducing research models: BBH corner charges, FCI, magic-angle TBG, SYK, Ising chain, Kitaev honeycomb |
 
 ```python
 quiz = hf.Quiz(13); quiz.interactive()     # or quiz.show() / quiz.check({1: "a", ...})

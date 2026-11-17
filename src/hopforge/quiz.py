@@ -17,6 +17,8 @@ _MODULES = {
     "08": "q08_scattering", "09": "q09_multiterminal", "10": "q10_superconductors_wavefunctions",
     "11": "q11_kpm_continuum", "12": "q12_parallel_params", "13": "q13_wannier_surface",
     "14": "q14_boltzmann_edelstein", "15": "q15_nonlinear_orbital_optical", "16": "q16_meanfield_floquet",
+    "17": "q17_build_hamiltonian", "18": "q18_orbitronics_bilayers", "19": "q19_interacting_phases",
+    "20": "q20_research_models",
 }
 LETTERS = "abcdefgh"
 

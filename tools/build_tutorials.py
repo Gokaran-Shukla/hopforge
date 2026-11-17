@@ -1006,6 +1006,315 @@ print(hf.anomalous_hall(Eff, 0.0, 300, n_jobs=-1))"""),
 ] + quiz_cells(16, "Mean field and Floquet")
 
 
+# =============================================================================
+NOTEBOOKS["17_step_by_step_build_a_new_hamiltonian"] = [
+    ("md", r"""# 17 · Step by step: build a new Hamiltonian from a paper and simulate it
+
+We rebuild, from scratch, the **Lieb-lattice topological insulator of Weeks & Franz**
+(PRB 82, 085310 (2010)) and take it through every stage of a real study:
+
+1. Write down the Hamiltonian.
+2. Define the lattice and orbitals.
+3. Check the geometry (neighbour shells).
+4. Add hoppings, including complex spin-orbit phases.
+5. Check Hermiticity and symmetries.
+6. Bands and DOS.
+7. Topology (Z2), compared with the paper.
+8. Edge states (bulk-boundary correspondence).
+9. Quantum transport through a device with disorder.
+10. Parameter scans and a phase diagram (in parallel).
+11. Package it: register the model and write a test.
+
+$$H=-t\sum_{\langle ij\rangle\sigma}c^\dagger_{i\sigma}c_{j\sigma}
++i\lambda\sum_{\langle\langle ij\rangle\rangle}\nu_{ij}\,c^\dagger_i\sigma_z c_j,
+\qquad \nu_{ij}=\pm1 \text{ (hopping turns left/right through the corner site)}$$"""),
+    ("code", SETUP + "\nfrom hopforge import transport as tr\nfrom hopforge.models._util import chirality"),
+    ("md", "## Step 1-2: lattice and orbitals\nThe Lieb lattice has three sites per square cell: a corner (Cu) and two edge centres (Ox, Oy). Positions are fractional."),
+    ("code", """lat = hf.Lattice([[1, 0], [0, 1]],
+                 [("Cu", [0.0, 0.0]), ("Ox", [0.5, 0.0]), ("Oy", [0.0, 0.5])])
+model = hf.Model(lat, spinful=True, name="Weeks-Franz Lieb TI")
+print(model)"""),
+    ("md", "## Step 3: inspect the geometry before adding anything\nWhich bonds are 1st, 2nd and 3rd neighbours? The SOC term lives on the 2nd-neighbour Ox–Oy bonds."),
+    ("code", """bare = hf.Model(lat)            # spinless copy for drawing
+hf.plot_lattice(bare, shells=3);
+for n, sh in enumerate(hf.plotting.neighbor_shells(bare, 3), 1):
+    pairs = {(bare.lat.names[i], bare.lat.names[j]) for i, j, R, d in sh["bonds"]}
+    print(f"shell {n}: d = {sh['distance']:.3f}  pairs = {sorted(pairs)}")"""),
+    ("md", "## Step 4: hoppings\nNN hopping on shell 1. For the SOC we loop over the 2nd-shell Ox–Oy bonds and compute the chirality ν from the path through the shared Cu neighbour. The Hermitian conjugate is added automatically."),
+    ("code", """t, lam = 1.0, 0.2
+model.add_neighbors(-t, shell=1)
+nso = 0
+for i, j, R, d in model.neighbors(2):
+    if {model.lat.names[i], model.lat.names[j]} == {"Ox", "Oy"}:
+        nu = chirality(model, i, j, R, nn_dist=0.5)
+        model.add_hopping(1j * lam * nu * hf.pauli("z"), i, j, R)
+        nso += 1
+print("SOC bonds per cell:", nso)
+model.special_points = {"G": np.zeros(2), "X": np.array([0.5, 0]), "M": np.array([0.5, 0.5])}
+print(model.summary())"""),
+    ("md", "## Step 5: sanity checks: Hermiticity, time reversal, S_z conservation"),
+    ("code", """k = np.random.rand(5, 2)
+H = model.hamiltonian(k)
+print("Hermitian:", np.allclose(H, H.conj().transpose(0, 2, 1)))
+# time reversal: Theta = i s_y K  ->  H(-k) = T H(k)* T^-1
+T = np.kron(np.eye(3), 1j * hf.pauli('y'))
+print("TRS:", np.allclose(model.hamiltonian(-k), T @ H.conj() @ T.conj().T))
+Sz = model.spin_operator('z')
+print("[H, S_z] = 0:", np.allclose(H @ Sz - Sz @ H, 0))"""),
+    ("md", "## Step 6: bands and DOS\nWithout SOC there is a flat band touching a Dirac cone at M. The SOC gaps it out."),
+    ("code", """fig, ax = plt.subplots(1, 3, figsize=(15, 4))
+m0 = hf.models.lieb().make_spinful(); m0.special_points = model.special_points
+m0.plot_bands(["G", "X", "M", "G"], ax=ax[0], title="λ = 0: flat band + Dirac cone")
+model.plot_bands(["G", "X", "M", "G"], ax=ax[1], title=f"λ = {lam}: gaps open")
+hf.plot_dos(hf.dos(model, nk=150, sigma=0.03), ax=ax[2])
+print("gaps:", hf.band_gap(model, 2, 60), hf.band_gap(model, 4, 60))"""),
+    ("md", "## Step 7: topology, compared with the paper\nWeeks & Franz find a Z2 topological insulator at 1/3 and 2/3 filling."),
+    ("code", """print("Z2 (1/3 filling) =", hf.z2_invariant(model, 2), "  Z2 (2/3 filling) =", hf.z2_invariant(model, 4))
+ks, wcc = hf.wilson_loop(model, 2, nscan=61)
+hf.plot_wcc(wcc, kperp=ks, title="Kramers partner switching (Z2 = 1)");"""),
+    ("md", "## Step 8: edge states (bulk-boundary correspondence)"),
+    ("code", """rib = model.ribbon(1, 30)
+b = hf.bands(rib, ["-X", "G", "X"], n=300, vectors=True)
+w = b.weights(rib.spin_operator('z') @ rib.projector(list(range(rib.norb - 6, rib.norb))))
+fig, ax = plt.subplots(figsize=(5, 4))
+for n in range(rib.nbands):
+    ax.scatter(b.x, b.energies[:, n], c=w[:, n], s=2, cmap="coolwarm", vmin=-0.3, vmax=0.3)
+ax.set_ylim(-2.5, 2.5); ax.set_xticks(b.path.ticks); ax.set_xticklabels(b.path.labels)
+ax.set_title("helical edge states (colour: top-edge s_z)");"""),
+    ("md", "## Step 9: quantum transport through a disordered device\nInside the gap the helical edges carry exactly 2e²/h and are immune to non-magnetic disorder."),
+    ("code", """Ek = model.energies(hf.kmesh(model, 60))
+E_in_gap = 0.5 * (Ek[:, 1].max() + Ek[:, 2].min())     # middle of the gap at 1/3 filling
+print("probing at E =", round(E_in_gap, 3), " (gap edges", round(Ek[:, 1].max(), 3), round(Ek[:, 2].min(), 3), ")")
+for W in (0.0, 1.0):
+    dev = tr.System(model, lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 15, onsite=tr.anderson(W, seed=2) if W else None)
+    dev.attach_lead((-1, 0)); dev.attach_lead((1, 0))
+    print(f"disorder W = {W}: T = {dev.transmission(1, 0, E_in_gap):.4f} (e²/h)")"""),
+    ("md", "## Step 10: parameter scan and phase diagram\nAdd a potential ±Δ on Ox/Oy (it breaks C4, like uniaxial strain) that competes with λ, then map Z2 in parallel. (A Cu/O offset is *not* enough: it never closes the gap at 1/3 filling. Try it.)"),
+    ("code", """def build(lam, delta):
+    m = hf.Model(lat, spinful=True)
+    m.add_neighbors(-1.0, 1)
+    for i, j, R, d in m.neighbors(2):
+        if {m.lat.names[i], m.lat.names[j]} == {"Ox", "Oy"}:
+            m.add_hopping(1j * lam * chirality(m, i, j, R, 0.5) * hf.pauli("z"), i, j, R)
+    m.add_onsite(delta, "Ox"); m.add_onsite(-delta, "Oy")
+    return m
+pd = hf.phases.topological_phase_diagram(build, "λ_SO", np.linspace(0.05, 0.4, 10), "Δ", np.linspace(0, 3.0, 13),
+                                          occ=2, invariant="z2", nk=30, n_jobs=-1)
+hf.phases.plot_phase_diagram(pd, contour="gap", title="Weeks-Franz Lieb model: Z2 at 1/3 filling");"""),
+    ("md", """## Step 11: package your model for the community
+```python
+@hf.models.register_model("weeks_franz_lieb", 2, "Lieb-lattice Z2 TI, Weeks & Franz PRB 82, 085310 (2010)")
+def weeks_franz_lieb(t=1.0, lam=0.2, delta=0.0):
+    ...                       # the code of Steps 2-4
+    return m
+
+# tests/test_my_model.py
+def test_weeks_franz_z2():
+    assert hf.z2_invariant(hf.models.get("weeks_franz_lieb"), 2) == 1
+```
+Then open a pull request (see CONTRIBUTING.md). Every model enters the library with a test against a published result."""),
+] + quiz_cells(17, "Building a Hamiltonian step by step")
+
+NOTEBOOKS["18_step_by_step_orbitronics_bilayers_moire"] = [
+    ("md", r"""# 18 · Step by step: a multi-orbital model, then orbital/spin Hall and torques in bilayers and moiré bilayers
+
+1. Slater-Koster p-orbital layers: a heavy layer and a ferromagnet.
+2. Atomic L·S spin-orbit coupling and exchange.
+3. Orbital and spin Hall conductivities of each layer.
+4. Stack them into a bilayer (heterostructure).
+5. Layer-resolved Edelstein responses.
+6. Spin-orbit, orbital and self-torques (Kubo-Středa: field-like and damping-like parts).
+7. The same in a twisted (moiré) bilayer.
+
+The torque decomposition follows Freimuth, Blügel & Mokrousov (PRB 2014) and Go et al. (orbital torque).
+These are model calculations for building intuition, not material predictions."""),
+    ("code", SETUP + "\nfrom hopforge import response as R, moire as MO\nfrom hopforge.models._util import LS_matrix"),
+    ("md", "## Step 1-2: build the two layers with Slater-Koster parameters"),
+    ("code", """def p_layer(pps, ppp, pps2, ppp2, lso=0.0, J=0.0, eps_z=0.0, name="layer"):
+    lat = hf.Lattice([[1, 0], [0, 1]], [("X:px", [0, 0]), ("X:py", [0, 0]), ("X:pz", [0, 0])])
+    m = hf.Model(lat, spinful=True, name=name)
+    m.add_slater_koster({"pps": pps, "ppp": ppp}, 1)          # nearest neighbours
+    m.add_slater_koster({"pps": pps2, "ppp": ppp2}, 2)        # next-nearest (px-py mixing)
+    if lso: m.add_onsite_matrix(LS_matrix(1, lso), ["X:px", "X:py", "X:pz"])
+    if J:   m.add_exchange(J, (0, 0, 1))
+    m.add_onsite(eps_z, "X:pz")
+    m.special_points = {"G": np.zeros(2), "X": np.array([0.5, 0]), "M": np.array([0.5, 0.5])}
+    return m
+heavy = p_layer(1.0, -0.3, 0.3, -0.1, lso=0.0, name="light-metal (no SOC)")
+ferro = p_layer(0.8, -0.25, 0.2, -0.08, lso=0.05, J=0.6, name="ferromagnet")
+fig, ax = plt.subplots(1, 2, figsize=(11, 4))
+heavy.plot_bands(["G", "X", "M", "G"], ax=ax[0], weights=heavy.orbital_operator('z') @ heavy.orbital_operator('z'), cmap="viridis")
+ferro.plot_bands(["G", "X", "M", "G"], ax=ax[1], weights=ferro.spin_operator('z'));"""),
+    ("md", "## Step 3: orbital vs spin Hall of each layer\nThe orbital Hall effect needs no SOC (Go et al., PRL 121, 086602 (2018))."),
+    ("code", """mus = np.linspace(-2.5, 2.5, 51)
+ohc = hf.orbital_hall(heavy, mus, nk=80, eta=0.02, n_jobs=-1).sigma
+shc = hf.spin_hall(heavy, mus, nk=80, eta=0.02, n_jobs=-1).sigma
+plt.plot(mus, ohc, label="OHC (light metal, no SOC)"); plt.plot(mus, shc, label="SHC (light metal)")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("(ħ/e) e²/h");"""),
+    ("md", "## Step 4: stack the layers into a bilayer\n`moire.bilayer` assembles any two commensurate layers, with Slater-Koster interlayer hopping between their orbitals."),
+    ("code", """bi = MO.bilayer(ferro, heavy, d=1.0, interlayer={"pps": 0.4, "ppp": -0.1}, cutoff=1.6, name="FM / light-metal bilayer")
+L = bi.info["layers"]
+print(bi, " bottom (FM) orbitals:", L["bottom"], " top orbitals:", L["top"])
+bi.special_points = ferro.special_points
+bi.plot_bands(["G", "X", "M", "G"], weights=bi.projector(L["bottom"]), cmap="coolwarm", title="weight on the FM layer");"""),
+    ("md", "## Step 5: layer-resolved Edelstein responses (E ∥ x)"),
+    ("code", """mu = 0.3
+for lay in ("bottom", "top"):
+    for name, op in (("S_y", bi.spin_operator('y')), ("L_y", bi.orbital_operator('y'))):
+        A = R.layer_operator(bi, L[lay], op)
+        r = R.kubo_streda(bi, A, "x", mu=mu, Gamma=0.05, nk=80, n_jobs=-1)
+        print(f"{lay:6s} <{name}>: Fermi surface {r['fermi_surface'][0]:+.4f}   Fermi sea {r['fermi_sea'][0]:+.4f}")"""),
+    ("md", "## Step 6: torques on the ferromagnet: SOT, orbital torque and self-torque\nThe **self-torque** is the torque a current in a ferromagnet exerts on its own magnetisation. By symmetry it **vanishes in a centrosymmetric ferromagnet**, so we first check that. Then we break inversion inside the FM with an interface (orbital-Rashba) term $\\gamma\\,\\hat d$ that hybridises $p_z$ with $p_{x,y}$. Finally we compare with the torque on the same FM inside the bilayer, which adds the angular momentum injected from the other layer."),
+    ("code", """Jex = 0.6
+def with_orbital_rashba(m, gamma):
+    m = m.copy()
+    m.add_neighbors(lambda d: gamma * d[0], 1, ["X:pz"], ["X:px"])
+    m.add_neighbors(lambda d: gamma * d[1], 1, ["X:pz"], ["X:py"])
+    return m
+cases = {"FM alone (centrosymmetric)": (ferro, None),
+         "FM alone + interface term (self-torque)": (with_orbital_rashba(ferro, 0.3), None),
+         "FM inside the bilayer": (bi, L["bottom"])}
+for name, (sys_, orbs) in cases.items():
+    T = R.torkance(sys_, (0, 0, 1), Jex, "x", mu=mu, Gamma=0.05, nk=80, orbitals=orbs, n_jobs=-1)
+    print(f"{name:40s} FL(FS) {T['fermi_surface_FL'][0]:+.4f}  DL(FS) {T['fermi_surface_DL'][0]:+.4f}  "
+          f"FL(sea) {T['fermi_sea_FL'][0]:+.4f}  DL(sea) {T['fermi_sea_DL'][0]:+.4f}")"""),
+    ("md", "The centrosymmetric ferromagnet gives exactly zero, as symmetry requires. Breaking inversion produces a self-torque, and the bilayer adds torques driven by the angular momentum (spin and orbital) coming from the neighbouring layer."),
+    ("code", """mus = np.linspace(-2.0, 2.0, 21)
+T = R.torkance(bi, (0, 0, 1), Jex, "x", mu=mus, Gamma=0.05, nk=60, orbitals=L["bottom"], n_jobs=-1)
+plt.plot(mus, T["fermi_surface_FL"], label="field-like (Fermi surface)")
+plt.plot(mus, T["fermi_sea_DL"], label="damping-like (Fermi sea)")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("torkance (per cell, natural units)"); plt.title("torque on the FM layer of the bilayer");"""),
+    ("md", "## Step 7: a twisted (moiré) bilayer\nThe same workflow runs on a commensurate twisted bilayer. `rotate_model` rotates the lattice, the p-orbital Slater-Koster blocks and the spin frame. Here two graphene layers at 13.2°, with an exchange field on the bottom layer and Rashba-like proximity SOC on the top."),
+    ("code", """g = MO.graphene_layer().make_spinful()
+gF = g.copy(); gF.add_exchange(0.1, (0, 0, 1))
+gR = g.copy(); gR.add_rashba(0.05 * 2.7 / 2.7, 1)
+theta, L1, L2 = MO.commensurate_hexagonal(2, 1)
+b1, b2 = g.lat.vectors[1][:2], g.lat.vectors[1][:2] - g.lat.vectors[0][:2]
+S = np.array([L1[0]*b1 + L1[1]*b2, L2[0]*b1 + L2[1]*b2])
+tw = MO.bilayer(gF, MO.rotate_model(gR, theta), S, 3.35, MO.moon_koshino(), 6.0, name=f"twisted {np.degrees(theta):.2f} deg")
+print(tw)
+ahc = hf.anomalous_hall(tw, np.linspace(-0.6, 0.6, 25), nk=24, eta=0.01, n_jobs=-1)
+she = hf.spin_hall(tw, np.linspace(-0.6, 0.6, 25), nk=24, eta=0.01, n_jobs=-1)
+plt.plot(ahc.mu, ahc.sigma, label="AHC"); plt.plot(she.mu, she.sigma, label="SHC (s_z)")
+plt.legend(); plt.xlabel("μ (eV)"); plt.title("moiré bilayer: Hall responses");"""),
+    ("code", """T = R.torkance(tw, (0, 0, 1), 0.1, "x", mu=0.2, Gamma=0.02, nk=16, orbitals=tw.info["layers"]["bottom"], n_jobs=-1)
+print("moiré bilayer torque on the magnetic layer: FL =", T["fermi_surface_FL"][0], " DL =", T["fermi_sea_DL"][0])"""),
+    ("md", """## Exercises
+1. Turn on SOC in the light-metal layer and separate the spin-torque and orbital-torque contributions.
+2. Reverse the magnetisation and check which torque components are even or odd in m.
+3. Scan the twist angle (m = 1, 2, 3) and plot the torkance versus θ."""),
+] + quiz_cells(18, "Orbitronics in bilayers and moire")
+
+NOTEBOOKS["19_step_by_step_interacting_hamiltonians_phase_diagrams"] = [
+    ("md", r"""# 19 · Step by step: interacting Hamiltonians, doping and quantum phase diagrams
+
+1. Write an interacting model (Hubbard) on a cluster cut from any lattice.
+2. Solve it exactly (Lanczos ED) and check against an exact result.
+3. Measure correlations, gaps and the spectral function.
+4. Dope it: energies and correlations versus filling.
+5. Mean-field phase diagram versus U and doping (PM / FM / Néel).
+6. A quantum phase transition: the transverse-field Ising chain (order parameter, Binder cumulant, entanglement, central charge).
+7. Bosons: Mott lobes of the Bose-Hubbard model."""),
+    ("code", SETUP + "\nfrom hopforge import manybody as MB, phases as PH"),
+    ("md", "## Step 1-2: Hubbard model on a 2×4 periodic cluster; check against the dimer formula first"),
+    ("code", """E = MB.Hubbard(M.chain().finite(2), U=4.0).ground_state(1, 1)[0]
+print("dimer:", E, " exact:", (4 - np.sqrt(16 + 16)) / 2)
+cluster = M.square().supercell([2, 4])         # 8 sites, periodic
+ed = MB.Hubbard(cluster, U=4.0, pbc=True)
+print("Hilbert space at half filling:", ed.dimension(4, 4))
+E0, psi = ed.ground_state(4, 4)
+print("E0 =", E0)"""),
+    ("md", "## Step 3: correlations, gaps, spectral function"),
+    ("code", """C = np.array([[ed.spin_correlation(psi, 0, j, 4, 4) for j in range(8)]])
+print("<S_0 . S_j> =", np.round(C, 3))
+print("total spin S =", round(ed.total_spin(psi, 4, 4), 4), "  charge gap =", round(ed.charge_gap(4, 4), 4),
+      "  spin gap =", round(ed.spin_gap(4, 4), 4))
+w = np.linspace(-8, 8, 800)
+A = -ed.greens_function(0, 4, 4, w, eta=0.15).imag / np.pi
+plt.plot(w, A); plt.xlabel("ω"); plt.title("local spectral function: Hubbard bands at U = 4");"""),
+    ("md", "## Step 4: doping the cluster"),
+    ("code", """Us = [2.0, 4.0, 8.0]
+for U in Us:
+    ed = MB.Hubbard(cluster, U=U, pbc=True)
+    rows = []
+    for N in range(2, 9, 2):
+        E, sec = ed.ground_state_all_sectors(N, n_jobs=-1)
+        rows.append((N, E, sec))
+    print(f"U={U}: " + "  ".join(f"N={N}: E={E:.3f} {sec}" for N, E, sec in rows))"""),
+    ("md", "## Step 5: mean-field phase diagram versus U and doping\nCompeting PM / FM / Néel solutions are converged at every point, and the lowest energy wins (as in Hirsch 1985)."),
+    ("code", """sq2 = M.square(t2=-0.2).make_spinful().supercell([[1, 1], [1, -1]])
+pd = PH.hubbard_phase_diagram(sq2, Us=np.linspace(1, 10, 10), fillings=np.linspace(0.5, 0.3, 9), nk=20, n_jobs=-1)
+PH.plot_phase_diagram(pd, contour="|m|", title="mean-field Hubbard (t' = -0.2): U vs doping");"""),
+    ("md", "## Step 6: a quantum phase transition: the transverse-field Ising chain"),
+    ("code", """scan = PH.quantum_critical_scan(lambda L, h: MB.PauliModel.transverse_field_ising(L, 1.0, h), "h / J",
+                               np.linspace(0.5, 1.5, 21), Ls=(8, 10, 12), n_jobs=-1)
+PH.plot_critical_scan(scan)
+print("Binder crossing h_c ≈", round(PH.binder_crossing(scan, 0, -1), 3), "(exact: 1)")
+psi = MB.PauliModel.transverse_field_ising(16, 1.0, 1.0).ground_state()[1]
+print("central charge at h = J:", round(PH.central_charge(psi, 16)[0], 3), "(Ising CFT: 1/2)")"""),
+    ("md", "## Step 7: Bose-Hubbard Mott lobes"),
+    ("code", """pdb = PH.mott_lobes(np.linspace(0.005, 0.2, 40), np.linspace(0.0, 3.0, 60), n_jobs=-1)
+ax = PH.plot_phase_diagram(pdb, title="Bose-Hubbard mean field")
+for n in (1, 2, 3):
+    mu = np.linspace(n - 1, n, 200)[1:-1]
+    ax.plot(MB.mott_lobe_boundary(n, 1.0, mu), mu, "k--", lw=1)
+print("lobe tip (U/zt)_c =", 1 / MB.mott_lobe_boundary(1), "(3 + 2√2)");"""),
+    ("md", """## Exercises
+1. Add a nearest-neighbour V to the cluster (`Hubbard(..., V=1.0)`) and look for charge order.
+2. Build a two-orbital Kanamori cluster (`atoms=[[0, 1], ...]`) and find the high-spin/low-spin transition versus J.
+3. Repeat Step 6 for the XXZ chain (`SpinModel.chain(L, Delta=...)`)."""),
+] + quiz_cells(19, "Interacting Hamiltonians and phase diagrams")
+
+NOTEBOOKS["20_reproduce_research_models_bernevig_vishwanath_sachdev"] = [
+    ("md", r"""# 20 · Reproduce research Hamiltonians: Bernevig, Vishwanath and Sachdev
+
+Each section builds a model, solves it, and compares with the published number.
+`python -m hopforge.benchmarks` runs all of these checks."""),
+    ("code", SETUP + "\nfrom hopforge import manybody as MB, moire as MO"),
+    ("md", "## 1. Higher-order TI: Benalcazar-Bernevig-Hughes quadrupole (Science 2017)"),
+    ("code", """b = M.bbh_quadrupole(gamma=0.5)
+print("nested Wilson loop p_y^{ν_x} =", hf.nested_wilson_loop(b, 2, 0))
+f = M.bbh_quadrupole(gamma=0.5, delta=1e-3).finite(16)
+E, V = np.linalg.eigh(f.hamiltonian())
+rho = (np.abs(V[:, :f.nbands // 2])**2).sum(1).reshape(-1, 4).sum(1) - 2
+P = f.lat.positions[::4]
+plt.scatter(P[:, 0], P[:, 1], c=rho, cmap="RdBu", s=40, vmin=-0.3, vmax=0.3); plt.colorbar(label="excess charge")
+plt.title("corner charges ±e/2"); plt.gca().set_aspect("equal")
+print("corner charge =", round(rho[(P[:, 0] > 7.5) & (P[:, 1] > 7.5)].sum(), 3))"""),
+    ("md", "## 2. Fractional Chern insulator (Regnault & Bernevig, PRX 2011)"),
+    ("code", """cb = M.checkerboard_chern()
+cb.plot_bands(title="flat Chern band (C = 1)")
+Es = MB.Fermions(cb.supercell([3, 4]), V=[1.0]).spectrum(4, k=8)
+plt.figure(); plt.plot(Es - Es[0], "o"); plt.title("ν = 1/3 ED: threefold quasi-degenerate ground state"); plt.ylabel("E - E0");"""),
+    ("md", "## 3. Twisted bilayer graphene: chiral magic angle (Tarnopolsky, Kruchkov & Vishwanath, PRL 2019)"),
+    ("code", """al = np.linspace(0.05, 0.75, 36)
+plt.plot(al, MO.velocity_curve(al, 0.0, n_jobs=-1), label="chiral (w0 = 0)")
+plt.plot(al, MO.velocity_curve(al, 0.8, n_jobs=-1), label="w0/w1 = 0.8")
+plt.plot(al, (1 - 3*al**2)/(1 + 6*al**2), "k:", label="BM perturbative")
+plt.axhline(0, c="gray"); plt.legend(); plt.xlabel("α = w1 / v kθ"); plt.ylabel("v*/v")
+print("first magic α (chiral):", MO.magic_angles(0.0, n=29)[0], "-> θ ≈", round(MO.alpha_to_theta(0.586), 3), "deg")"""),
+    ("code", """x, E, ticks, labels = MO.BistritzerMacDonald(0.586, 0.0).bands(n=80, nbands=8, n_jobs=-1)
+plt.plot(x, E, "k"); plt.xticks(ticks, labels); plt.ylim(-2, 2); plt.ylabel("E / v kθ")
+plt.title("flat bands at the magic angle");"""),
+    ("md", "## 4. Sachdev-Ye-Kitaev model: ground-state energy and random-matrix level statistics"),
+    ("code", """Ns = [14, 16, 18, 20]
+E = [np.mean([MB.SYK(N, seed=s).ground_energy() / N for s in range(6)]) for N in Ns]
+plt.plot(1 / np.array(Ns), E, "o-"); plt.xlabel("1/N"); plt.ylabel("E0 / N")
+c = np.polyfit(1 / np.array(Ns), E, 2); print("extrapolated E0/N =", round(c[-1], 4), "(large-N: -0.0406)")
+for N in (16, 18, 20):
+    print(f"N = {N} (N mod 8 = {N % 8}): <r> = {MB.syk_level_statistics(N, 10):.3f}")"""),
+    ("md", "## 5. Quantum criticality (Sachdev, Quantum Phase Transitions): Ising chain against the exact solution"),
+    ("code", """for h in (0.5, 1.0, 2.0):
+    E = MB.PauliModel.transverse_field_ising(12, 1.0, h).ground_state()[0]
+    print(f"h = {h}: ED {E:.10f}   Pfeuty exact {MB.tfim_exact_energy(12, 1.0, h):.10f}")"""),
+    ("md", "## 6. Kitaev honeycomb spin model (exact ground state on a small cluster)"),
+    ("code", """cl = M.honeycomb().supercell([2, 2])
+kh = MB.PauliModel.kitaev_honeycomb(cl, 1.0, 1.0, 1.0)
+E0 = kh.ground_state()[0]
+print("8-site Kitaev cluster: E0 / site =", E0 / cl.norb)"""),
+] + quiz_cells(20, "Research models")
+
+
 def build(execute=False):
     OUT.mkdir(exist_ok=True)
     for name, cells in NOTEBOOKS.items():

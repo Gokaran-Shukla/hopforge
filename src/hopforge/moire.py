@@ -289,9 +289,14 @@ def bilayer(bottom, top, S=None, d=3.35, interlayer=None, cutoff=6.0, name="bila
         layers.append((lay, z, _fill_supercell(lay, S)))
     names, pos, index = [], [], {}
     for li, (lay, z, orbs) in enumerate(layers):
-        for k, (o, Rc, p) in enumerate(orbs):
+        atom_id = {}
+        for (o, Rc, p) in orbs:
             site, _, kind = lay.lat.names[o].partition(":")
-            names.append(f"L{li}{site}_{k}" + (f":{kind}" if kind else ""))
+            # one label per atom (site + cell), shared by all its orbitals, so that
+            # orbital angular momentum operators act within each atom
+            key = (site, tuple(np.round(lay.lat.positions[o], 6)), Rc)
+            aid = atom_id.setdefault(key, len(atom_id))
+            names.append(f"L{li}{site}_{aid}" + (f":{kind}" if kind else ""))
             pp = np.zeros(3); pp[:2] = p[:2]; pp[2] = z
             pos.append(pp)
             index[(li, o, Rc)] = len(names) - 1

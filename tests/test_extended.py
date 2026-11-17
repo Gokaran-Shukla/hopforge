@@ -131,3 +131,16 @@ def test_register_model():
     assert "_test_chain2" in M.list_models()
     assert np.isclose(M.get("_test_chain2", t=2.0).energies(np.array([0.0]))[0, 0], -4.0)
     M.REGISTRY.pop("_test_chain2")
+
+
+def test_bilayer_keeps_atoms_for_orbital_operators():
+    from hopforge import moire as MO
+    lat = hf.Lattice([[1, 0], [0, 1]], [("X:px", [0, 0]), ("X:py", [0, 0]), ("X:pz", [0, 0])])
+    a = hf.Model(lat, spinful=True)
+    a.add_slater_koster({"pps": 1, "ppp": -0.3}, 1)
+    bi = MO.bilayer(a, a, d=1.0, interlayer={"pps": 0.4, "ppp": -0.1}, cutoff=1.6)
+    L = bi.orbital_operator("z")
+    assert np.allclose(np.linalg.eigvalsh(L)[[0, -1]], [-1, 1])
+    k = np.random.default_rng(3).random((3, 2))
+    H = bi.hamiltonian(k)
+    assert np.allclose(H, H.conj().transpose(0, 2, 1))
