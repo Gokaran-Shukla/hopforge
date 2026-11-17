@@ -29,6 +29,8 @@ DFT Wannier90 model. Every tool works on all of them:
 | **Validation** | 59 benchmarks against published results ([BENCHMARKS.md](BENCHMARKS.md)) and 110 tests |
 | **Learning** | 20 executed tutorial notebooks (four of them step-by-step "build your own Hamiltonian" walkthroughs), each followed by a 20-question quiz (400 questions) |
 
+**Overview slides:** [docs/slides/hopforge_overview.pdf](docs/slides/hopforge_overview.pdf) (Beamer, every feature with figures; source in `docs/slides/`).
+
 ![neighbour shells](docs/img/lattice_shells.png)
 
 ## Install
