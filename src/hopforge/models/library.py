@@ -479,3 +479,23 @@ def bdg(model, mu=0.0, delta=0.0):
 
 REGISTRY["bdg_square"] = (lambda mu=-3.0, delta=0.2: bdg(square(), mu, delta), 2,
                           "BdG s-wave superconductor on a square lattice")
+
+
+# ===========================================================================
+# community registration
+# ===========================================================================
+def register_model(name, dim, description=""):
+    """Decorator that adds a model constructor to the library so it shows up in
+    ``list_models()`` and ``get(name, ...)``::
+
+        @hf.models.register_model("my_lattice", 2, "my favourite model (ref.)")
+        def my_lattice(t=1.0):
+            ...
+            return model
+    """
+    def deco(func):
+        if name in REGISTRY:
+            raise KeyError(f"model {name!r} already registered")
+        REGISTRY[name] = (func, dim, description)
+        return func
+    return deco

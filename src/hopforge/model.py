@@ -178,6 +178,18 @@ class Model:
     def copy(self) -> "Model":
         return copy.deepcopy(self)
 
+    def make_spinful(self) -> "Model":
+        """Spin-degenerate spinful copy of a spinless model (every amplitude
+        becomes amplitude x identity in spin space)."""
+        if self.spinful:
+            return self.copy()
+        m = Model(self.lat, spinful=True, name=self.name)
+        m._onsite = np.array([o[0, 0] * np.eye(2) for o in self._onsite], complex)
+        m._terms = [_Term(t.i, t.j, t.R.copy(), t.T[0, 0] * np.eye(2, dtype=complex)) for t in self._terms]
+        m.special_points = dict(self.special_points)
+        m.info = dict(self.info)
+        return m
+
     def orb(self, o) -> int:
         """Orbital index from an index or a name."""
         if isinstance(o, (int, np.integer)):
