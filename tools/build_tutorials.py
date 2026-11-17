@@ -444,6 +444,289 @@ plt.legend(); plt.xlabel("μ"); plt.ylabel("(ħ/e) e²/h"); plt.title("orbital v
 ] + quiz_cells(7, "Kubo transport")
 
 
+# =============================================================================
+TR_SETUP = SETUP + "\nfrom hopforge import transport as tr\nfrom hopforge import kpm"
+
+NOTEBOOKS["08_scattering_and_leads"] = [
+    ("md", r"""# 08 · Quantum transport I: scattering regions, leads and Landauer conductance
+
+hopforge includes a Kwant-style transport layer, written natively in hopforge.
+Cut a scattering region of **any shape** out of **any** hopforge model, attach
+semi-infinite leads, and compute transmissions:
+
+$$G = \frac{e^2}{h}\,T,\qquad T_{ij}=\mathrm{Tr}\left[\Gamma_i G^r \Gamma_j G^a\right],\qquad
+G^r=\left[E+i0-H_S-\sum_l\Sigma_l\right]^{-1}$$"""),
+    ("code", TR_SETUP),
+    ("md", "## 1. A wire and its conductance steps\nA perfect wire transmits each open channel fully, so $T(E)$ equals the number of channels."),
+    ("code", """sq = M.square()
+wire = tr.System(sq, lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 10)
+wire.attach_lead((-1, 0)); wire.attach_lead((1, 0))
+tr.plot_system(wire);"""),
+    ("code", """Es = np.linspace(-4, 0, 200)
+T = wire.conductance(Es)
+N = [wire.smatrix(E).num_modes(0) for E in Es]
+plt.plot(Es, T, label="T(E)"); plt.plot(Es, N, "--", label="open channels")
+plt.xlabel("E"); plt.ylabel("T"); plt.legend(); plt.title("quantised conductance steps");"""),
+    ("md", "## 2. Inside a lead: bands, modes, self-energy\nThe surface Green's function of a 1D chain has the closed form $g=(E-i\\sqrt{4-E^2})/2$:"),
+    ("code", """ch = tr.System(M.chain(), lambda r: 0 <= r[0] < 5); ch.attach_lead((-1,))
+for E in (-1.5, 0.3, 1.9):
+    print(E, np.round(ch.leads[0].surface_green(E)[0, 0], 6), np.round((E - 1j*np.sqrt(4 - E**2))/2, 6))
+L = wire.leads[0]
+k = np.linspace(-np.pi, np.pi, 300)
+plt.plot(k, L.bands(k), "k", lw=0.8); plt.axhline(-2.5, c="r"); plt.xlabel("k (per lead cell)"); plt.title("lead bands")
+print("right-moving modes at E=-2.5:", L.num_modes(-2.5))"""),
+    ("md", "## 3. A quantum point contact (any shape)\nThe region is flood-filled from `start` through the hoppings while `shape(pos)` is True."),
+    ("code", """def qpc(r, w=3.0):
+    x, y = r[0] - 20, r[1] - 12
+    return 0 <= r[0] < 40 and abs(y) < 12 and (abs(y) < w + 0.08 * x**2)
+fig, axes = plt.subplots(1, 2, figsize=(13, 4))
+s = tr.System(sq, qpc, start=(20, 12)); s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+tr.plot_system(s, ax=axes[0], bonds=False)
+for w in (2.0, 3.0, 4.5):
+    sw = tr.System(sq, lambda r, w=w: qpc(r, w), start=(20, 12)); sw.attach_lead((-1, 0)); sw.attach_lead((1, 0))
+    Es = np.linspace(-4, -2.5, 80)
+    axes[1].plot(Es, sw.conductance(Es), label=f"w={w}")
+axes[1].legend(); axes[1].set_xlabel("E"); axes[1].set_ylabel("T"); axes[1].set_title("QPC steps");"""),
+    ("md", "## 4. Unitarity and reciprocity"),
+    ("code", """sd = tr.System(sq, lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 10, onsite=tr.anderson(2.0, seed=1))
+sd.attach_lead((-1, 0)); sd.attach_lead((1, 0))
+S = sd.smatrix(-1.0)
+print("T_10 =", S.transmission(1, 0), " T_01 =", S.transmission(0, 1))
+print("T + R =", S.transmission(1, 0) + S.transmission(0, 0), " = N =", S.num_modes(0))"""),
+    ("md", "## 5. Disorder averaging and Anderson localisation\n$\\langle\\ln T\\rangle$ decays linearly with length in the localised regime."),
+    ("code", """lengths = [5, 10, 20, 40, 60]
+for W in (1.0, 2.5):
+    lnT = []
+    for Lx in lengths:
+        vals = []
+        for seed in range(8):
+            s = tr.System(sq, lambda r, Lx=Lx: 0 <= r[0] < Lx and 0 <= r[1] < 6, onsite=tr.anderson(W, seed=seed))
+            s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+            vals.append(np.log(s.transmission(1, 0, -1.0)))
+        lnT.append(np.mean(vals))
+    plt.plot(lengths, lnT, "o-", label=f"W = {W}")
+plt.xlabel("length L"); plt.ylabel("<ln T>"); plt.legend(); plt.title("localisation");"""),
+    ("md", "## 6. Graphene: zigzag vs armchair nanoribbon junctions"),
+    ("code", """g = M.honeycomb()
+gs = tr.System(g, lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 8)
+gs.attach_lead((-1, 0)); gs.attach_lead((1, 0))
+Es = np.linspace(-1.2, 1.2, 121)
+plt.plot(Es, gs.conductance(Es)); plt.xlabel("E/t"); plt.ylabel("T"); plt.title("graphene ribbon device");"""),
+    ("md", """## Exercises
+1. Put a Gaussian potential bump in the wire (`onsite=`) and watch resonances in T(E).
+2. Measure the localisation length versus width for W = 2.
+3. Build a ring (Aharonov-Bohm) with a magnetic field (see notebook 09) and plot T versus flux."""),
+] + quiz_cells(8, "Scattering and leads")
+
+NOTEBOOKS["09_multiterminal_quantum_hall_qsh"] = [
+    ("md", r"""# 09 · Quantum transport II: multi-terminal devices, quantum Hall and quantum spin Hall
+
+Landauer-Büttiker: $I_i=\frac{e}{h}\sum_j G_{ij}V_j$ with $G_{ij}=-T_{ij}$ for $i\neq j$.
+A magnetic field enters through Peierls phases $t_{ij}\to t_{ij}e^{i\int A\cdot dl}$."""),
+    ("code", TR_SETUP),
+    ("md", "## 1. A six-terminal Hall bar\nThe current leads (0, 1) carry the field in a Landau gauge that is invariant along x; the voltage probes (2–5) are field-free."),
+    ("code", """B = 2*np.pi*0.05          # 0.05 flux quanta per plaquette
+def hallbar(B, L=60, W=30):
+    s = tr.System(M.square(), lambda r: 0 <= r[0] < L and 0 <= r[1] < W, peierls=tr.landau_gauge(B, "x"))
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    for x0 in (12, 40): s.attach_lead((0, 1),  shape=lambda r, x0=x0: x0 <= r[0] < x0 + 8, peierls=None)
+    for x0 in (12, 40): s.attach_lead((0, -1), shape=lambda r, x0=x0: x0 <= r[0] < x0 + 8, peierls=None)
+    return s
+hb = hallbar(B)
+tr.plot_system(hb, bonds=False);"""),
+    ("code", """Es = np.linspace(-3.9, -2.0, 120)
+Rxy, Rxx = [], []
+for E in Es:
+    S = hb.smatrix(E)
+    Rxy.append(S.four_terminal_resistance(0, 1, 2, 4)); Rxx.append(S.four_terminal_resistance(0, 1, 2, 3))
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.plot(Es, Rxy, label="R_xy"); ax.plot(Es, Rxx, label="R_xx")
+for nu in (1, 2, 3, 4): ax.axhline(1/nu, c="gray", ls=":")
+ax.set_ylim(-0.1, 1.3); ax.set_xlabel("E"); ax.set_ylabel("R (h/e²)"); ax.legend(); ax.set_title("quantum Hall plateaus");"""),
+    ("md", "## 2. Edge-state current flow"),
+    ("code", """S = hb.smatrix(-3.4)
+bonds, J = S.current(0)
+tr.plot_current(hb, bonds, J, title="current from the left lead (ν = 1): it follows one edge");"""),
+    ("md", "## 3. Landau fan: T between the current leads versus B"),
+    ("code", """Bs = np.linspace(0.02, 0.6, 60)
+for E in (-3.5, -3.0):
+    T = []
+    for b in Bs:
+        s = tr.System(M.square(), lambda r: 0 <= r[0] < 30 and 0 <= r[1] < 20, peierls=tr.landau_gauge(b, "x"))
+        s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+        T.append(s.transmission(1, 0, E))
+    plt.plot(Bs/(2*np.pi), T, label=f"E={E}")
+plt.xlabel("flux per plaquette"); plt.ylabel("T"); plt.legend(); plt.title("edge channels drop out one by one");"""),
+    ("md", "## 4. Quantum spin Hall: 2e²/h, spin-resolved, robust to disorder"),
+    ("code", """km = M.kane_mele(lso=0.1)
+for W in (0.0, 1.0, 2.0):
+    s = tr.System(km, lambda r: 0 <= r[0] < 25 and 0 <= r[1] < 15, onsite=tr.anderson(W, seed=3) if W else None)
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    S = s.smatrix(0.05)
+    up = dict(spin="up"); dn = dict(spin="down")
+    print(f"W={W}: T={S.transmission(1,0):.4f}   T_upup={S.transmission(1,0,up,up):.4f}   T_dndn={S.transmission(1,0,dn,dn):.4f}")"""),
+    ("code", """s = tr.System(km, lambda r: 0 <= r[0] < 25 and 0 <= r[1] < 15)
+s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+S = s.smatrix(0.05)
+fig, axes = plt.subplots(1, 2, figsize=(13, 4))
+b, Jup = S.current(0, operator=np.diag([1, 0]))
+tr.plot_current(s, b, Jup, ax=axes[0], title="spin-up current: upper edge")
+b, Jdn = S.current(0, operator=np.diag([0, 1]))
+tr.plot_current(s, b, Jdn, ax=axes[1], title="spin-down current: lower edge");"""),
+    ("md", "## 5. Breaking time reversal: a Zeeman field on the QSH edge"),
+    ("code", """for J in (0.0, 0.05, 0.2):
+    s = tr.System(M.kane_mele(lso=0.1), lambda r: 0 <= r[0] < 25 and 0 <= r[1] < 15,
+                  onsite=lambda r, n, J=J: J * hf.pauli('x'))       # in-plane Zeeman in the region only
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    print(f"in-plane Zeeman J={J}: T(E=0) = {s.transmission(1, 0, 0.0):.4f}")"""),
+    ("md", "Breaking time reversal opens a gap at the edge Dirac point, so the edge states backscatter and the conductance at E = 0 is lost."),
+    ("md", """## Exercises
+1. Reverse B and verify the Onsager relation $R_{xy}(B)=-R_{xy}(-B)$.
+2. Add disorder to the Hall bar: how wide do the plateaus stay?
+3. Build a graphene Hall bar and find the half-integer sequence ν = ±2, ±6, …"""),
+] + quiz_cells(9, "Multi-terminal, QH and QSH")
+
+NOTEBOOKS["10_superconductors_ldos_wavefunctions"] = [
+    ("md", r"""# 10 · Quantum transport III: superconducting junctions, LDOS, wavefunctions and currents
+
+BdG: $H_{BdG}=\begin{pmatrix}H-\mu&\Delta\\\Delta^\dagger&-(H-\mu)^*\end{pmatrix}$; NS conductance (BTK):
+$G = N_e - R_{ee} + R_{he}$."""),
+    ("code", TR_SETUP),
+    ("md", "## 1. Andreev reflection at an NS junction"),
+    ("code", """mu, Delta = -2.0, 0.1
+Nm = M.bdg(M.square(), mu=mu, delta=0.0)        # normal region / lead
+Sm = M.bdg(M.square(), mu=mu, delta=Delta)      # superconducting lead
+el, ho = dict(orbitals=["A_e"]), dict(orbitals=["A_h"])
+def ns_junction(barrier):
+    # tunnel barrier on the last column, right at the NS interface
+    pot = lambda r, name: (barrier if r[0] >= 5 else 0.0) * (1 if name.endswith("_e") else -1)
+    s = tr.System(Nm, lambda r: 0 <= r[0] < 6 and 0 <= r[1] < 10, onsite=pot)
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0), model=Sm)
+    return s
+Es = np.linspace(0, 0.3, 61)
+for b in (0.0, 0.8, 1.5, 3.0):
+    plt.plot(Es/Delta, tr.andreev_conductance(ns_junction(b), Es, 0, el, ho), label=f"barrier {b}")
+plt.axvline(1, c="gray", ls=":"); plt.xlabel("E / Δ"); plt.ylabel("G (e²/h)"); plt.legend()
+plt.title("BTK: Andreev doubling (2N = 10) → tunnelling spectroscopy");"""),
+    ("code", """s = ns_junction(0.0); S = s.smatrix(0.02)
+print("N_e =", S.num_modes(0, el), " R_ee =", round(S.transmission(0, 0, el, el), 4),
+      " R_he =", round(S.transmission(0, 0, ho, el), 4), " -> G =", round(tr.andreev_conductance(s, 0.02, 0, el, ho)[0], 4))"""),
+    ("md", "## 2. Majorana zero mode at the end of a Kitaev chain\nThe NS conductance through a topological Kitaev chain shows a quantised zero-bias peak of 2e²/h."),
+    ("code", """lead = M.kitaev_chain(mu=0.5, t=1.0, delta=0.0)          # normal metallic lead
+def kitaev_device(mu_wire, Vb):
+    wire = M.kitaev_chain(mu=mu_wire, t=1.0, delta=0.6)
+    barrier = lambda r, name: (Vb if r[0] < 1 else 0.0) * (1 if name == "e" else -1)
+    s = tr.System(wire, lambda r: 0 <= r[0] < 60, onsite=barrier)
+    s.attach_lead((-1,), model=lead)
+    return s
+Es = np.linspace(-0.4, 0.4, 321)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+for ax, mw in zip(axes, (0.5, 3.0)):
+    for Vb in (1.5, 3.0, 5.0):
+        G = tr.andreev_conductance(kitaev_device(mw, Vb), Es, 0, dict(orbitals=["e"]), dict(orbitals=["h"]))
+        ax.plot(Es, G, label=f"barrier {Vb}")
+    ax.set_title(("topological" if mw < 2 else "trivial") + f" wire (μ = {mw})")
+    ax.set_xlabel("E"); ax.set_ylabel("G (e²/h)"); ax.legend(); ax.set_ylim(-0.1, 2.2)"""),
+    ("md", "The topological wire shows a zero-bias peak of exactly 2e²/h (resonant Andreev reflection through the Majorana). A stronger barrier makes it narrower but not lower. The trivial wire shows no peak."),
+    ("md", "## 3. LDOS of a disordered device"),
+    ("code", """s = tr.System(M.square(), lambda r: (r[0]-15)**2 + (r[1]-15)**2 < 15**2, start=(15, 15),
+              onsite=tr.anderson(1.5, seed=2))
+s.attach_lead((-1, 0), shape=lambda r: 10 <= r[1] < 20); s.attach_lead((1, 0), shape=lambda r: 10 <= r[1] < 20)
+S = s.smatrix(-1.0)
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+tr.plot_system(s, ax=axes[0], bonds=False)
+tr.plot_map(s, S.ldos(), ax=axes[1], title="LDOS at E = -1")
+tr.plot_map(s, S.density(0), ax=axes[2], title="density injected from lead 0");"""),
+    ("md", "## 4. Scattering wavefunctions and currents"),
+    ("code", """psi = S.wavefunctions(0)
+print("number of scattering states from lead 0:", psi.shape[1], "  open channels:", S.num_modes(0))
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+tr.plot_map(s, np.abs(psi[:, 0])**2, ax=axes[0], cmap="magma", title="|ψ|² of one scattering state")
+b, J = S.current(0); tr.plot_current(s, b, J, ax=axes[1], title="bond currents from lead 0");"""),
+    ("code", """P = s.positions()
+for xc in (8.5, 15.5, 22.5):
+    cut = (P[b[:, 0], 0] - xc) * (P[b[:, 1], 0] - xc) < 0
+    sign = np.sign(P[b[cut, 1], 0] - P[b[cut, 0], 0])
+    print(f"current through x = {xc}: {np.sum(J[cut]*sign):.6f}   (T = {S.transmission(1, 0):.6f})")"""),
+    ("md", """## Exercises
+1. Plot the BTK conductance versus barrier height at E = 0 and compare with $2T_N^2/(2-T_N)^2$.
+2. Show the Majorana peak height stays 2e²/h when the tunnel barrier is increased (it only narrows).
+3. Map the LDOS of a Haldane flake connected to two leads at an energy in the bulk gap."""),
+] + quiz_cells(10, "Superconductors, LDOS, wavefunctions")
+
+NOTEBOOKS["11_kpm_and_continuum"] = [
+    ("md", r"""# 11 · Large-scale methods: KPM and continuum discretisation
+
+* **KPM** expands $\rho(E)$, LDOS and the Kubo-Bastin conductivity in Chebyshev polynomials:
+  this scales linearly with system size (millions of orbitals).
+* **Continuum discretisation** turns a $\mathbf{k}\cdot\mathbf{p}$ Hamiltonian into a
+  tight-binding model on a grid, which can then go through every tool in hopforge."""),
+    ("code", TR_SETUP),
+    ("md", "## 1. KPM density of states of a 200×200 graphene sheet (80,000 orbitals)"),
+    ("code", """big = M.honeycomb().supercell([200, 200])
+H = big.hamiltonian_sparse()
+print(H.shape, H.nnz, "non-zeros")
+E, rho = kpm.dos(H, np.linspace(-3.2, 3.2, 600), num_moments=1000, num_vectors=10)
+plt.plot(E, rho / big.norb * 2); plt.xlabel("E/t"); plt.ylabel("DOS per cell"); plt.title("KPM DOS of graphene");"""),
+    ("md", "## 2. Disorder: the van Hove peaks broaden"),
+    ("code", """sc = M.honeycomb().supercell([100, 100])
+for W in (0.0, 1.0, 2.5):
+    m = hf.add_disorder(sc, W, seed=1)
+    E, rho = kpm.dos(m.hamiltonian_sparse(), np.linspace(-4, 4, 400), num_moments=600, num_vectors=4)
+    plt.plot(E, rho / sc.norb * 2, label=f"W={W}")
+plt.legend(); plt.xlabel("E"); plt.ylabel("DOS per cell");"""),
+    ("md", "## 3. LDOS near a vacancy (exact KPM moments on chosen sites)"),
+    ("code", """sc = M.honeycomb().supercell([30, 30]); vac = sc.remove_orbitals([0])
+H = vac.hamiltonian_sparse(); E = np.linspace(-1, 1, 400)
+P = vac.lat.positions; r0 = sc.lat.positions[0]
+d = np.linalg.norm(P - r0, axis=1); near = np.argsort(d)[:3]; far = np.argsort(d)[-1]
+L = kpm.ldos(H, list(near) + [far], E, num_moments=800)
+for n, l in zip(["1st neighbour", "2nd", "3rd", "far away"], L): plt.plot(E, l, label=n)
+plt.legend(); plt.xlabel("E"); plt.title("vacancy-induced zero mode on the opposite sublattice");"""),
+    ("md", "## 4. Kubo-Bastin Hall conductivity of a large disordered Chern insulator"),
+    ("code", """h = M.haldane(t2=0.15)
+mus = np.linspace(-3.5, 3.5, 141)
+for W in (0.0, 1.5, 4.0):
+    m = hf.add_disorder(h.supercell([50, 50]), W, seed=2)
+    sig = kpm.conductivity(m.hamiltonian_sparse(), m.velocity_sparse('x'), m.velocity_sparse('y'),
+                           m.lat.cell_volume, mus, num_moments=256, num_vectors=16)
+    plt.plot(mus, sig, lw=2 if W == 0 else 1.2, label=f"W={W}")
+plt.plot(mus, hf.anomalous_hall(h, mus, 100, eta=0.02).sigma, "k--", lw=1, label="clean Kubo (k-space)")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("σ_xy (e²/h)"); plt.title("KPM Kubo-Bastin");"""),
+    ("md", "## 5. Continuum discretisation: from k·p to tight binding"),
+    ("code", """ex = "A*(k_x*sigma_x + k_y*sigma_y) + (M - B*(k_x**2 + k_y**2))*sigma_z"
+p = dict(A=1.0, B=1.0, M=0.5)
+f = hf.continuum.lambdify_continuum(ex, "xy", p)
+k = np.linspace(-1.5, 1.5, 200)
+Econt = np.array([np.linalg.eigvalsh(f(kk, 0)) for kk in k])
+plt.plot(k, Econt[:, 0], "k", lw=3, label="continuum"); plt.plot(k, Econt[:, 1], "k", lw=3)
+for n, a in enumerate((1.0, 0.5, 0.25)):
+    m = hf.discretize(ex, "xy", a, p)
+    Ed = m.energies(np.stack([k * a / (2*np.pi), 0*k], 1))
+    plt.plot(k, Ed[:, 0], "--", color=f"C{n}", label=f"a = {a}"); plt.plot(k, Ed[:, 1], "--", color=f"C{n}")
+plt.ylim(-3, 3); plt.legend(); plt.xlabel("k_x"); plt.title("discretised bands converge as a → 0")
+print("Chern number of the discretised model:", hf.chern_number(hf.discretize(ex, "xy", 1.0, p), 1))"""),
+    ("md", "## 6. A Bi2Se3-type 3D TI straight from k·p, then a slab"),
+    ("code", """ti = "M0*tau_z - B*(k_x**2+k_y**2+k_z**2)*tau_z + A*(k_x*tau_x*sigma_x + k_y*tau_x*sigma_y + k_z*tau_x*sigma_z)"
+mt = hf.discretize(ti, "xyz", 1.0, dict(M0=1.0, B=0.5, A=1.0))
+print("Z2 indices:", hf.z2_3d(mt, 2, nk=24, nscan=25))
+mt.slab(2, 16).plot_bands(["X", "G", "M"], ylim=(-1.5, 1.5), title="surface Dirac cone");"""),
+    ("md", "## 7. Continuum model + transport: a disordered BHZ quantum-well wire"),
+    ("code", """bhz = ("C0 - D*(k_x**2+k_y**2) + A*(k_x*tau_x*sigma_z - k_y*tau_y)"
+       " + (M0 - B*(k_x**2+k_y**2))*tau_z")
+qw = hf.discretize(bhz, "xy", 1.0, dict(C0=0.0, D=0.0, A=0.6, B=1.0, M0=0.3))
+for W in (0.0, 1.0):
+    s = tr.System(qw, lambda r: 0 <= r[0] < 30 and 0 <= r[1] < 20, onsite=tr.anderson(W, seed=5) if W else None)
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    print(f"W={W}: T(E=0.1) = {s.transmission(1, 0, 0.1):.4f}  (QSH: two helical channels)")"""),
+    ("md", "Note: exactly at the edge Dirac point (E = 0) a 20-site-wide ribbon has a tiny hybridisation gap between opposite edges, so probe slightly away from it or use wider systems."),
+    ("md", """## Exercises
+1. Converge the KPM DOS of graphene near E = 0 versus the number of moments.
+2. Find the disorder strength at which the Haldane Hall plateau is destroyed.
+3. Discretise a Rashba 2DEG `k_x**2 + k_y**2 + alpha*(k_y*sigma_x - k_x*sigma_y)` and plot its spin texture."""),
+] + quiz_cells(11, "KPM and continuum")
+
+
 def build(execute=False):
     OUT.mkdir(exist_ok=True)
     for name, cells in NOTEBOOKS.items():

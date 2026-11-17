@@ -14,6 +14,8 @@ import importlib
 _MODULES = {
     "01": "q01_lattices", "02": "q02_bands", "03": "q03_geometry", "04": "q04_models",
     "05": "q05_berry_chern", "06": "q06_z2_wilson", "07": "q07_kubo",
+    "08": "q08_scattering", "09": "q09_multiterminal", "10": "q10_superconductors_wavefunctions",
+    "11": "q11_kpm_continuum",
 }
 LETTERS = "abcdefgh"
 
