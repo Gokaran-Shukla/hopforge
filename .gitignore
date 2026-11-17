@@ -16,3 +16,4 @@ docs/slides/*.toc
 docs/slides/*.fls
 docs/slides/*.fdb_latexmk
 docs/slides/*.xdv
+docs/slides/*.vrb
