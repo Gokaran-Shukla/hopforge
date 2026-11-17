@@ -254,6 +254,7 @@ def fu_kane_parity(model, occ, parity_op, trim=None):
         prod = np.prod(np.sign(ev))
         deltas.append(np.sign(prod) if model.spinful is False else
                       np.prod(np.sign(np.sort(ev)[::2])))
+    deltas = [int(d) for d in deltas]
     z2 = int(round((1 - np.prod(deltas)) / 2))
     return z2, deltas
 
