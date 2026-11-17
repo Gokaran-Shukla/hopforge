@@ -727,6 +727,285 @@ for W in (0.0, 1.0):
 ] + quiz_cells(11, "KPM and continuum")
 
 
+# =============================================================================
+NOTEBOOKS["12_parallel_parametric_noise"] = [
+    ("md", r"""# 12 · Parallel workflows, parametric systems, magnetic gauges and shot noise
+
+* `n_jobs=N` distributes energy and parameter sweeps, disorder realisations and k-meshes
+  over N worker processes on one node, with one BLAS thread each. On a 40-core node use
+  `n_jobs=40` or `export HOPFORGE_NJOBS=40`.
+* Kwant-style **value functions** get their parameters at solve time: `params=dict(V=0.3)`.
+* `field_gauge(B)` builds Peierls phases for any planar field profile $B(x,y)$.
+* Shot noise and the Fano factor come from transmission eigenvalues: $F=\sum\tau(1-\tau)/\sum\tau$."""),
+    ("code", TR_SETUP + "\nimport time\nprint('cores visible:', hf.parallel.available_cores())"),
+    ("md", "## 1. Parallel energy sweep (results are identical to serial)"),
+    ("code", """s = tr.System(M.square(), lambda r: 0 <= r[0] < 40 and 0 <= r[1] < 20, onsite=tr.anderson(1.0, seed=1))
+s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+Es = np.linspace(-3.9, 0, 40)
+t0 = time.time(); T1 = s.conductance(Es, n_jobs=1); t1 = time.time() - t0
+t0 = time.time(); T2 = s.conductance(Es, n_jobs=-1); t2 = time.time() - t0
+print(f"serial {t1:.2f}s   parallel {t2:.2f}s   identical: {np.allclose(T1, T2)}")
+plt.plot(Es, T2); plt.xlabel("E"); plt.ylabel("T");"""),
+    ("md", "On a 40-core Ibex/Shaheen node a SLURM script looks like `examples/slurm_40cores.sh`:"),
+    ("code", "print(open('../examples/slurm_40cores.sh').read())"),
+    ("md", "## 2. Parameters at solve time: a gate-defined barrier"),
+    ("code", """gate = lambda r, name, Vg, w=4: Vg if abs(r[0] - 20) < w else 0.0
+g = tr.System(M.square(), lambda r: 0 <= r[0] < 40 and 0 <= r[1] < 10, onsite=gate)
+g.attach_lead((-1, 0)); g.attach_lead((1, 0))
+Vgs = np.linspace(0, 2.5, 26)
+res = tr.sweep(g, lambda S: S.transmission(1, 0), energies=[-3.0], params_list=[dict(Vg=v) for v in Vgs], n_jobs=-1)
+plt.plot(Vgs, np.array(res).ravel(), "o-"); plt.xlabel("gate V_g"); plt.ylabel("T"); plt.title("pinch-off");"""),
+    ("md", "## 3. Spectrum of the closed system versus a parameter"),
+    ("code", """box = tr.System(M.square(), lambda r: 0 <= r[0] < 12 and 0 <= r[1] < 12,
+                peierls=tr.field_gauge(lambda x, y, B: B, "x"))
+Bs = np.linspace(0, 1.2, 60)
+spec = tr.spectrum(box, [dict(B=b) for b in Bs], n_jobs=-1)
+for n in range(25): plt.plot(Bs / (2*np.pi), [e[n] for e in spec], "k", lw=0.6)
+plt.xlabel("flux per plaquette"); plt.ylabel("E"); plt.title("Fock-Darwin / Landau-level fan of a box");"""),
+    ("md", "## 4. Arbitrary magnetic-field profiles: a magnetic barrier"),
+    ("code", """Bprof = lambda x, y, B0: B0 * np.exp(-((x - 30) / 4)**2)          # localised field stripe
+mb = tr.System(M.square(), lambda r: 0 <= r[0] < 60 and 0 <= r[1] < 20, peierls=tr.field_gauge(Bprof, "x"))
+mb.attach_lead((-1, 0)); mb.attach_lead((1, 0))
+B0s = np.linspace(0, 0.8, 30)
+T = tr.sweep(mb, lambda S: S.transmission(1, 0), energies=[-3.0], params_list=[dict(B0=b) for b in B0s], n_jobs=-1)
+plt.plot(B0s, np.array(T).ravel(), "o-"); plt.xlabel("B0"); plt.ylabel("T"); plt.title("magnetic barrier");"""),
+    ("md", "## 5. Shot noise: ballistic, tunnelling and diffusive conductors"),
+    ("code", """bar = tr.System(M.square(), lambda r: 0 <= r[0] < 20 and 0 <= r[1] < 10,
+                onsite=lambda r, n, V: V if 9 <= r[0] < 11 else 0)
+bar.attach_lead((-1, 0)); bar.attach_lead((1, 0))
+print("ballistic  F =", bar.smatrix(-3.2, params=dict(V=0)).shot_noise()[1])
+print("tunnelling F =", bar.smatrix(-3.2, params=dict(V=4)).shot_noise()[1])
+def diffusive(seed):
+    d = tr.System(M.square(), lambda r: 0 <= r[0] < 60 and 0 <= r[1] < 30, onsite=tr.anderson(1.6, seed=seed))
+    d.attach_lead((-1, 0)); d.attach_lead((1, 0)); return d
+Fs = hf.parallel.pmap(lambda sd: diffusive(sd).smatrix(-1.0).shot_noise()[1], range(8), n_jobs=-1)
+print(f"diffusive  F = {np.mean(Fs):.3f} +- {np.std(Fs)/np.sqrt(len(Fs)):.3f}   (theory 1/3)")
+tau = diffusive(0).smatrix(-1.0).transmission_eigenvalues()
+plt.hist(tau, bins=20); plt.xlabel("τ"); plt.title("bimodal distribution of transmission eigenvalues");"""),
+    ("md", "## 6. Parallel k-space and topology"),
+    ("code", """h = M.haldane()
+t0 = time.time(); a = hf.anomalous_hall(h, np.linspace(-3, 3, 61), 300, n_jobs=1).sigma; t1 = time.time() - t0
+t0 = time.time(); b = hf.anomalous_hall(h, np.linspace(-3, 3, 61), 300, n_jobs=-1).sigma; t2 = time.time() - t0
+print(f"AHC on 90,000 k-points: serial {t1:.2f}s, parallel {t2:.2f}s, identical {np.allclose(a, b)}")
+print("FKM Z2 (parallel over the 6 planes):", hf.z2_3d(M.diamond_fkm(), 2, nk=30, nscan=31, n_jobs=-1))"""),
+    ("md", """## Exercises
+1. Measure the parallel speed-up versus `n_jobs` on your 40-core node.
+2. Map T(E, Vg) on a 2D grid with `tr.sweep`.
+3. Compute the Fano factor of a chaotic cavity (stadium shape with narrow leads): expect 1/4."""),
+] + quiz_cells(12, "Parallel, parameters, gauges, noise")
+
+NOTEBOOKS["13_wannier90_and_surface_states"] = [
+    ("md", r"""# 13 · Wannier90 models and surface Green's functions
+
+hopforge reads `seedname_hr.dat` / `seedname_tb.dat` (plus POSCAR / .win / centres), so
+DFT-derived Wannier models go straight into every tool. The surface module computes
+WannierTools-style surface spectral functions $A(\mathbf k_\parallel,E)=-\frac1\pi\mathrm{Im\,Tr}\,G_s$."""),
+    ("code", SETUP + "\nfrom hopforge import io, surface"),
+    ("md", "## 1. Import / export round trip\n(Here a hopforge model plays the role of a DFT Wannier model; with your own files just call `read_wannier90`.)"),
+    ("code", """fkm = M.diamond_fkm()
+fkm.to_wannier90_hr("fkm_hr.dat")
+A = fkm.lat.vectors
+pos = np.repeat(fkm.lat.positions, 2, axis=0)
+w90 = io.read_wannier90("fkm_hr.dat", lattice=A, positions=pos, spinful=True)
+k = np.random.rand(5, 3)
+print(w90, " identical H(k):", np.allclose(w90.hamiltonian(k), fkm.hamiltonian(k)))
+print("Z2 of the imported model:", hf.z2_3d(w90, 2, nk=30, nscan=31, n_jobs=-1))"""),
+    ("md", """Typical use with real DFT output:
+```python
+m = hf.io.read_wannier90("Bi2Se3_hr.dat", lattice="POSCAR", positions="Bi2Se3_centres.xyz",
+                         spinful=True, spin_order="interleaved")
+m.add_onsite(-E_fermi)            # put E_F at zero
+```"""),
+    ("md", "## 2. TI surface Dirac cone"),
+    ("code", """wd = M.wilson_dirac_ti()
+path, E, Asurf = surface.spectral(wd, direction=2, kpath=["X", "G", "M"], energies=np.linspace(-1.5, 1.5, 200),
+                                  n=120, eta=5e-3, n_jobs=-1)
+_, _, Abulk = surface.spectral(wd, 2, ["X", "G", "M"], np.linspace(-1.5, 1.5, 200), n=120, eta=5e-3, bulk=True, n_jobs=-1)
+fig, ax = plt.subplots(1, 2, figsize=(11, 4))
+surface.plot_spectral(path, E, Asurf, ax=ax[0], title="surface (top)")
+surface.plot_spectral(path, E, Abulk, ax=ax[1], title="bulk");"""),
+    ("md", "## 3. Spin-resolved surface spectra: helical edge of the Kane-Mele model\n`operator=` gives $-\\frac1\\pi\\mathrm{Im\\,Tr}[O\\,G_s]$. On the top edge, right movers carry spin up and left movers spin down."),
+    ("code", """km = M.kane_mele(lso=0.1)
+Sz = km.spin_operator('z')
+path, E, Asz = surface.spectral(km, direction=1, kpath=[[-0.5, 0], [0, 0], [0.5, 0]],
+                                energies=np.linspace(-0.6, 0.6, 160), n=150, eta=3e-3, operator=Sz, n_jobs=-1)
+fig, ax = plt.subplots(figsize=(5, 4))
+v = np.abs(Asz).max() / 20
+ax.pcolormesh(path.x, E, Asz.T, cmap="RdBu_r", vmin=-v, vmax=v, shading="auto")
+ax.set_xticks(path.ticks); ax.set_xticklabels(path.labels); ax.set_title("edge spectral weight of s_z (red = up)");"""),
+    ("md", "Note: in the idealised 4-band Wilson-Dirac TI the z-surface states are eigenstates of $\\tau_y\\sigma_z$, so the bare in-plane spin $\\langle\\tau_0\\sigma_{x,y}\\rangle$ vanishes on that surface and the locked texture is carried by orbital-spin operators. Realistic Wannier models of Bi$_2$Se$_3$ do give a finite spin polarisation."),
+    ("md", "## 4. Weyl semimetal Fermi arcs"),
+    ("code", """w = M.weyl_minimal()
+K1, K2, Aarc = surface.fermi_arc_map(w, direction=0, energy=0.0, nk=121, eta=3e-3, n_jobs=-1)
+hf.plot_kmap(np.log10(Aarc + 1e-2), extent=(-0.5, 0.5, -0.5, 0.5), symmetric=False, cmap="inferno",
+             title="Fermi arc on the x-surface")
+plt.xlabel("k_y"); plt.ylabel("k_z"); plt.axhline(0.25, c="c", ls=":"); plt.axhline(-0.25, c="c", ls=":");"""),
+    ("md", "## 5. Kane-Mele edge spectral function (2D model, 1D edge)"),
+    ("code", """km = M.kane_mele(lso=0.1)
+path, E, Aedge = surface.spectral(km, direction=1, kpath=[[-0.5, 0], [0, 0], [0.5, 0]],
+                                  energies=np.linspace(-1, 1, 200), n=150, eta=3e-3, n_jobs=-1)
+surface.plot_spectral(path, E, Aedge, title="Kane-Mele zigzag edge: helical states");"""),
+    ("md", """## Exercises
+1. Compare the surface spectral function with slab bands (`wd.slab(2, 20)`).
+2. Plot the bottom surface (`side="bottom"`) and explain the difference.
+3. Import your own Wannier90 model and plot its surface states."""),
+] + quiz_cells(13, "Wannier90 and surface states")
+
+NOTEBOOKS["14_boltzmann_thermoelectric_edelstein"] = [
+    ("md", r"""# 14 · Boltzmann transport, thermoelectrics and the Edelstein effect
+
+$L^{(n)}_{ab}=\frac{1}{VN_k}\sum(-\partial_Ef)(E-\mu)^n v_av_b$, so
+$\sigma=L^{(0)}$, $S=-\frac{1}{k_BT}L^{(0)-1}L^{(1)}$ and $\kappa=(L^{(2)}-L^{(1)}L^{(0)-1}L^{(1)})/T$.
+Edelstein: $\delta\langle O\rangle = \chi E$ with extrinsic (∝τ) and intrinsic interband parts."""),
+    ("code", SETUP + "\nfrom hopforge import response as R"),
+    ("md", "## 1. Conductivity, Seebeck and the Wiedemann-Franz law"),
+    ("code", """mus = np.linspace(-3.8, 3.8, 77)
+r = R.boltzmann(M.square(), mus, kT=0.05, nk=200, n_jobs=-1)
+fig, ax = plt.subplots(1, 3, figsize=(15, 3.6))
+ax[0].plot(mus, r.sigma_over_tau[:, 0, 0]); ax[0].set_title("σ/τ")
+ax[1].plot(mus, r.seebeck_uV_per_K[:, 0, 0]); ax[1].set_title("Seebeck (μV/K if E in eV)")
+ax[2].plot(mus, r.lorenz / (np.pi**2/3)); ax[2].set_title("Lorenz number / L0"); ax[2].set_ylim(0.8, 1.2)
+for a in ax: a.set_xlabel("μ")"""),
+    ("md", "## 2. Thermoelectric power factor of a two-band semiconductor"),
+    ("code", """semi = M.honeycomb(delta=0.5)
+mus = np.linspace(-1.5, 1.5, 121)
+for kT in (0.025, 0.05, 0.1):
+    r = R.boltzmann(semi, mus, kT=kT, nk=150, n_jobs=-1)
+    pf = r.seebeck[:, 0, 0]**2 * r.sigma_over_tau[:, 0, 0]
+    plt.plot(mus, pf, label=f"kT={kT}")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("S²σ/τ (natural units)"); plt.title("power factor peaks near the band edges");"""),
+    ("md", "## 3. Rashba-Edelstein effect: current-induced spin polarisation"),
+    ("code", """ra = M.rashba_square(alpha=0.3)
+mus = np.linspace(-4.2, 0, 60)
+for a in "xyz":
+    e = R.edelstein(ra, ra.spin_operator(a), "x", mu=mus, kT=0.02, nk=150, n_jobs=-1)
+    plt.plot(mus, e["total"], label=f"<s_{a}> for E ∥ x")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("χ (per cell, τ = 1)"); plt.title("only s_y responds to E_x");"""),
+    ("md", "## 4. Intrinsic (field-like vs damping-like) Edelstein in a Rashba ferromagnet"),
+    ("code", """for J in (0.0, 0.3, 0.6):
+    fm = M.rashba_square(alpha=0.3, J=J)
+    e = R.edelstein(fm, fm.spin_operator('x'), "x", mu=-2.0, kT=0.02, nk=150, n_jobs=-1)
+    print(f"J={J}: <s_x> extrinsic {e['extrinsic'][0]:+.5f}   intrinsic {e['intrinsic'][0]:+.5f}")"""),
+    ("md", "## 5. Orbital Edelstein effect: the orbital Rashba model\nA surface field breaks inversion and allows bond-odd hybridisation $\\gamma\\,\\hat d_x$ between $p_z$ and $p_x$ (and $\\hat d_y$ for $p_z$-$p_y$), which is the orbital Rashba effect (Park et al., PRB 2011). It produces an orbital Edelstein response even without spin-orbit coupling."),
+    ("code", """po = M.p_orbital_square()
+gamma = 0.3
+po.add_neighbors(lambda d: gamma * d[0], 1, ["X:pz"], ["X:px"])     # odd in d: inversion broken
+po.add_neighbors(lambda d: gamma * d[1], 1, ["X:pz"], ["X:py"])
+po.add_onsite(-0.5, "X:pz")                                          # crystal-field splitting
+mus = np.linspace(-2.5, 2.5, 60)
+for a in "xyz":
+    e = R.edelstein(po, po.orbital_operator(a), "x", mu=mus, kT=0.02, nk=120, n_jobs=-1)
+    plt.plot(mus, e["total"], label=f"<L_{a}>")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("χ (per cell, τ = 1)")
+plt.title("orbital Rashba-Edelstein: E ∥ x induces L_y");"""),
+    ("md", """## Exercises
+1. Convert σ/τ to S/m with `r.sigma_SI(tau_fs=10)` for a 3D model.
+2. Find where |S| peaks relative to the band edge of the gapped honeycomb model.
+3. Compare spin and orbital Edelstein responses of `M.p_orbital_square(lso=0.2)`."""),
+] + quiz_cells(14, "Boltzmann and Edelstein")
+
+NOTEBOOKS["15_nonlinear_hall_orbital_optical"] = [
+    ("md", r"""# 15 · Nonlinear Hall effect, orbital magnetism and optical conductivity"""),
+    ("code", SETUP + "\nfrom hopforge import response as R"),
+    ("md", "## 1. Berry curvature dipole of a tilted, strained massive Dirac model"),
+    ("code", """def tilted(tilt=0.4, strain=0.3, m=1.5):
+    q = M.qwz(m)
+    q.add_hopping_matrix(-0.5j * tilt * np.eye(2), ["a", "b"], ["a", "b"], [1, 0])   # tilt: + tilt sin kx
+    q.add_hopping_matrix(0.5 * strain * hf.pauli('z'), ["a", "b"], ["a", "b"], [1, 0])  # anisotropic mass
+    return q
+q = tilted()
+mus = np.linspace(-1.5, 1.5, 61)
+D = R.berry_curvature_dipole(q, mus, kT=0.03, nk=250, n_jobs=-1)
+plt.plot(mus, D[:, 0], label="D_x"); plt.plot(mus, D[:, 1], label="D_y")
+plt.legend(); plt.xlabel("μ"); plt.title("Berry curvature dipole: peaks at the band edges");"""),
+    ("code", """print("no tilt  :", R.berry_curvature_dipole(tilted(tilt=0), 0.8, kT=0.03, nk=200)[0])
+print("with tilt:", R.berry_curvature_dipole(tilted(), 0.8, kT=0.03, nk=200)[0])"""),
+    ("md", "## 2. Valley-contrasting orbital moment of gapped graphene"),
+    ("code", """g = M.honeycomb(delta=0.3)
+k1, k2 = np.meshgrid(np.linspace(0, 1, 120, endpoint=False), np.linspace(0, 1, 120, endpoint=False), indexing="ij")
+E, Om, m = R.orbital_moment(g, np.stack([k1.ravel(), k2.ravel()], 1))
+hf.plot_kmap(m[:, 1].reshape(120, 120) * R.MU_B_PER_UNIT, title="conduction-band orbital moment (μ_B for eV, Å)");
+K, Kp = g.special_points["K"], g.special_points["K'"]
+print("m(K) =", R.orbital_moment(g, K)[2][0, 1]*R.MU_B_PER_UNIT, "  m(K') =", R.orbital_moment(g, Kp)[2][0, 1]*R.MU_B_PER_UNIT)"""),
+    ("md", "## 3. Modern orbital magnetisation and the Středa formula"),
+    ("code", """h = M.haldane(t2=0.15)
+mus = np.linspace(-3.5, 3.5, 141)
+Mo = R.orbital_magnetization(h, mus, kT=0.01, nk=150, n_jobs=-1)
+plt.plot(mus, Mo, label="M(μ)")
+plt.plot(mus, (mus) * h.lat.cell_volume / (2*np.pi) + Mo[70], "--", label="slope C·A/2π in the gap")
+plt.legend(); plt.xlabel("μ"); plt.ylabel("M per cell"); plt.ylim(Mo.min()-0.1, Mo.max()+0.1);"""),
+    ("md", "## 4. Optical conductivity of graphene: the universal plateau and Pauli blocking"),
+    ("code", """om = np.linspace(0.05, 6.5, 200)
+for mu in (0.0, 0.5, 1.0):
+    s = R.optical_conductivity(M.honeycomb(), om, mu=mu, kT=0.01, nk=300, eta=0.03, n_jobs=-1)
+    plt.plot(om, s.real / 0.125, label=f"μ = {mu}")
+plt.axhline(1, c="gray", ls=":"); plt.legend(); plt.xlabel("ħω / t"); plt.ylabel("Re σ_xx / (e²/8ħ)")
+plt.title("universal conductivity, van Hove peak at 2t, Pauli blocking below 2μ");"""),
+    ("md", "## 5. Optical Hall conductivity of a Chern insulator"),
+    ("code", """om = np.linspace(0.01, 4, 120)
+s = R.optical_conductivity(M.haldane(t2=0.15), om, mu=0.0, nk=200, eta=0.03, component="xy", n_jobs=-1)
+plt.plot(om, 2*np.pi*s.real, label="Re σ_xy (e²/h)"); plt.plot(om, 2*np.pi*s.imag, label="Im σ_xy")
+plt.axhline(-1, c="gray", ls=":"); plt.legend(); plt.xlabel("ω"); plt.title("ω → 0 limit: the quantised Hall value");"""),
+    ("md", """## Exercises
+1. Show that the BCD vanishes for the C3-symmetric gapped honeycomb model.
+2. Compute the orbital magnetisation of the d-wave altermagnet with Rashba SOC.
+3. Add a Drude term (`drude_tau=`) to the doped-graphene optical conductivity."""),
+] + quiz_cells(15, "Nonlinear, orbital, optical")
+
+NOTEBOOKS["16_meanfield_hubbard_and_floquet"] = [
+    ("md", r"""# 16 · Mean-field Hubbard magnetism and Floquet engineering
+
+* Hartree-Fock: $U n_\uparrow n_\downarrow \to U(\mathrm{Tr}\,\rho_i-\rho_i)$ per site (collinear and noncollinear).
+* Floquet: $A(t)$ enters as a Peierls phase, and the high-frequency Hamiltonian is
+  $H_{\rm eff}=H_0+\sum_{m>0}[H_m,H_{-m}]/m\omega$."""),
+    ("code", SETUP + "\nfrom hopforge import meanfield as MF, floquet as F"),
+    ("md", "## 1. Antiferromagnetism of the honeycomb Hubbard model"),
+    ("code", """g = M.honeycomb().make_spinful()
+Us = np.linspace(1.0, 5.0, 17)
+res = MF.phase_diagram(g, Us, filling=0.5, init={"A": (0, 0, 1), "B": (0, 0, -1)}, nk=48, kT=0.002, maxiter=500)
+plt.plot(Us, [abs(r.moments[0, 2]) for r in res], "o-"); plt.axvline(2.23, c="gray", ls=":")
+plt.xlabel("U / t"); plt.ylabel("|m| per site"); plt.title("mean-field Néel order (U_c ≈ 2.23 t)");"""),
+    ("code", """r = res[-4]
+print(r)
+r.model.plot_bands(["G", "K", "M", "G"], weights=r.model.spin_operator('z'), title=f"AFM bands, U = {Us[-4]:.2f}");"""),
+    ("md", "## 2. Square lattice: Néel order for any U, gap = U|m|"),
+    ("code", """sq = M.square().make_spinful().supercell([[1, 1], [1, -1]])
+for U in (1.0, 2.0, 4.0):
+    r = MF.hubbard(sq, U, filling=0.5, init={0: (0, 0, 1), 1: (0, 0, -1)}, nk=60, kT=0.002, maxiter=600)
+    print(f"U={U}: m={r.moments[0, 2]:+.4f}   gap={hf.band_gap(r.model, 2, 60):.4f}   U|m|={U*abs(r.moments[0, 2]):.4f}")"""),
+    ("md", "## 3. Ferromagnetism near a van Hove singularity (Stoner)"),
+    ("code", """sq1 = M.square(t2=-0.3).make_spinful()
+for U in (2.0, 4.0, 6.0):
+    r = MF.hubbard(sq1, U, filling=0.3, init="ferro", nk=60, kT=0.005, maxiter=600)
+    print(f"U={U}: m_z = {r.moments[0, 2]:.4f}  converged {r.converged}")"""),
+    ("md", "## 4. Floquet: light-induced Chern insulator in graphene"),
+    ("code", """g0 = M.honeycomb()
+K = g0.special_points["K"]
+for A0 in (0.2, 0.4, 0.6):
+    d = F.circular(A0, 10.0)
+    print(f"A0={A0}: gap(K) eff={np.diff(F.EffectiveModel(g0, d).energies(K))[0]:.5f}  "
+          f"exact={np.diff(F.FloquetModel(g0, d).quasienergies(K)[0])[0]:.5f}  "
+          f"C={hf.chern_number(F.EffectiveModel(g0, d), 1, 40):+.0f}")
+print("opposite helicity: C =", round(hf.chern_number(F.EffectiveModel(g0, F.circular(0.4, 10.0, -1)), 1, 40)))
+print("linear polarisation: C =", round(hf.chern_number(F.EffectiveModel(g0, F.linear(0.4, 10.0)), 1, 40)))"""),
+    ("code", """d = F.circular(0.6, 5.0)
+Fl = F.FloquetModel(g0, d, n_max=4)
+p = hf.kpath(g0, ["G", "K", "M", "G"], 200)
+q = np.array([Fl.quasienergies(k)[0] for k in p.k])
+Ee = F.EffectiveModel(g0, d).energies(p.k)
+plt.plot(p.x, q, "k", label="exact quasienergies"); plt.plot(p.x, Ee, "r--", lw=0.8)
+plt.xticks(p.ticks, p.labels); plt.ylim(-3.2, 3.2); plt.title("Floquet bands (ω = 5t): replicas fold back into the zone");"""),
+    ("md", "## 5. Floquet Hall conductivity (effective model)"),
+    ("code", """Eff = F.EffectiveModel(g0, F.circular(1.0, 8.0))      # strong drive: gap ~ 0.1 t
+print("gap at K:", np.diff(Eff.energies(K))[0], "  C =", round(hf.chern_number(Eff, 1, 60)))
+print(hf.anomalous_hall(Eff, 0.0, 300, n_jobs=-1))"""),
+    ("md", """## Exercises
+1. Compute the mean-field phase diagram of the half-filled kagome Hubbard model (try ferro and 120° initial guesses on a supercell).
+2. Find where the high-frequency expansion breaks down by comparing effective and exact gaps versus ω.
+3. Drive the Kane-Mele model with circular light: can you obtain a spin-polarised quantum anomalous Hall phase?"""),
+] + quiz_cells(16, "Mean field and Floquet")
+
+
 def build(execute=False):
     OUT.mkdir(exist_ok=True)
     for name, cells in NOTEBOOKS.items():

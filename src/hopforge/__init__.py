@@ -1,4 +1,7 @@
-"""hopforge: forge any tight-binding Hamiltonian, from 1D chains to 3D crystals.
+"""hopforge: a universal tight-binding engine - from 1D chains to 3D crystals:
+bands, topology, Kubo/Boltzmann/nonlinear response, Kwant-style quantum
+transport, KPM, surface Green's functions, Wannier90 import, mean-field
+Hubbard and Floquet - with node-level parallelism and published benchmarks.
 
 Quick start
 -----------
@@ -17,11 +20,11 @@ from .topology import (berry_phase, zak_phase, polarization, wilson_loop, chern_
                        berry_curvature, berry_curvature_map, z2_invariant, z2_3d,
                        z2_from_wcc, winding_number, fu_kane_parity)
 from .kubo import hall_conductivity, anomalous_hall, spin_hall, orbital_hall
-from . import models, plotting, transport, kpm, parallel, io, surface, response, meanfield, floquet
+from . import models, plotting, transport, kpm, parallel, io, surface, response, meanfield, floquet, benchmarks
 from .continuum import discretize
 from .plotting import plot_bands, plot_dos, plot_lattice, plot_wcc, plot_kmap
 from .quiz import Quiz
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [n for n in dir() if not n.startswith("_")]

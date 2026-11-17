@@ -15,7 +15,8 @@ _MODULES = {
     "01": "q01_lattices", "02": "q02_bands", "03": "q03_geometry", "04": "q04_models",
     "05": "q05_berry_chern", "06": "q06_z2_wilson", "07": "q07_kubo",
     "08": "q08_scattering", "09": "q09_multiterminal", "10": "q10_superconductors_wavefunctions",
-    "11": "q11_kpm_continuum",
+    "11": "q11_kpm_continuum", "12": "q12_parallel_params", "13": "q13_wannier_surface",
+    "14": "q14_boltzmann_edelstein", "15": "q15_nonlinear_orbital_optical", "16": "q16_meanfield_floquet",
 }
 LETTERS = "abcdefgh"
 
