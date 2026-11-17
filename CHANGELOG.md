@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+* Strongly correlated systems: ED for Hubbard / extended Hubbard / Kanamori, spinless fermions (FCI), spin-1/2 XXZ / J1-J2, general Pauli-string models (TFIM, Kitaev honeycomb), SYK, Bose-Hubbard mean field; Lanczos Green functions.
+* Quantum phases: Hubbard phase diagrams vs U and doping, critical scans (Binder, fidelity, entanglement, central charge), Mott lobes, topological phase maps.
+* Bernevig/Vishwanath models: BBH quadrupole + nested Wilson loops, p+ip, type-II Weyl, flat Chern band, Bistritzer-MacDonald / chiral TBG magic angles.
+* Moire: real-space twisted and stacked bilayers (orbital + spin frame rotation), Moon-Koshino couplings.
+* Kubo-Streda responses, spin-orbit / orbital / self torques (torkance).
+* 59 published-result benchmarks.
+
 ## 0.5.0
 * Benchmark suite: 37 published results (`python -m hopforge.benchmarks`), run in CI.
 * Vogl sp3s* silicon via the Slater-Koster engine (`hf.benchmarks.silicon_vogl`).

@@ -30,6 +30,7 @@ Hubbard and Floquet - with node-level parallelism and published benchmarks.
 * **`hall_conductivity(model, mu=0.0, nk=100, operator=None, component='xy', eta=0.0, kT=0.0, op_name=None, length_unit_angstrom=True, n_jobs=None)`**: Intrinsic Hall-type conductivity on a uniform k mesh.
 * **`kmesh(model, n, shift=0.0, endpoint=False)`**: Uniform Monkhorst-Pack-like mesh in reduced coordinates.
 * **`kpath(model, path=None, n=200)`**: Piecewise-linear path through special points.
+* **`nested_wilson_loop(model, occ, direction=0, nk=60, nperp=60, branch=1)`**: Nested Wilson loop for multipole insulators (Benalcazar, Bernevig & Hughes, Science 357, 61 (2017)). The Wilson loop along ``direction`` gives Wannier bands nu(k_perp); the Berry phase of the Wannier sector with nu > 0 (``branch=+1``) along k_perp is the Wannier-sector polarisation p^{nu}, which is 1/2 in the quadrupole phase. Returns p in [0, 1).
 * **`orbital_hall(model, mu=0.0, nk=100, L='z', component='xy', **kw)`**: Intrinsic orbital Hall conductivity with the atomic L operator (atom-centred approximation), built from the orbital kinds (p, d).
 * **`pauli(which)`**: Return a Pauli matrix: ``pauli(0..3)`` or ``pauli('x'|'y'|'z'|'0')``.
 * **`plot_bands(model, path=None, n=200, ax=None, color='k', weights=None, cmap='coolwarm', ylim=None, lw=1.2, title=None, fermi=None, **kw)`**: Plot the band structure. ``weights`` may be an operator (matrix): the bands are then coloured by its expectation value (e.g. spin_operator('z')).
@@ -56,6 +57,7 @@ Library of published tight-binding models. See :func:`list_models`.
 
 * **`LS_matrix(l, lam)`**: lambda L.S in the real-orbital (x) spin basis, orbital-major.
 * **`altermagnet_dwave(t=1.0, t1=0.6, t2=0.2, J=0.5, direction=(0, 0, 1), lso=0.0)`**: Minimal d-wave altermagnet (two sublattices with opposite moments and anisotropic NNN hopping, cf. Smejkal, Sinova & Jungwirth PRX 12, 031042 (2022)). Spin splitting vanishes along G-M and is maximal along G-X / G-Y. Optional Rashba ``lso``.
+* **`bbh_quadrupole(gamma=0.5, lam=1.0, delta=0.0)`**: Benalcazar-Bernevig-Hughes quadrupole insulator (Science 357, 61 (2017)): H = (g + l cos kx) G4 + l sin kx G3 + (g + l cos ky) G2 + l sin ky G1 + d G0. Quadrupole phase (q_xy = 1/2, corner charges +-e/2) for |g/l| < 1. Four orbitals per cell (pi flux per plaquette); delta breaks chiral symmetry.
 * **`bcc(t=1.0)`**: Body-centred cubic lattice (conventional a = 1).
 * **`bdg(model, mu=0.0, delta=0.0)`**: Bogoliubov-de Gennes doubling of any model: electron block H - mu, hole block -(H - mu)^*, on-site pairing delta between e and h of every orbital (the spin-degenerate s-wave toy model of Kwant's superconductor tutorial; for spinful models use delta * i sigma_y explicitly).
 * **`bhz(A=1.0, B=1.0, C=0.0, D=0.0, M=1.0)`**: Bernevig-Hughes-Zhang lattice model of HgTe quantum wells (Science 314, 1757 (2006)). Orbitals E (s-like) and H (p-like), spinful. Quantum spin Hall for 0 < M/B < 8 (M/B != 4).
@@ -63,6 +65,7 @@ Library of published tight-binding models. See :func:`list_models`.
 * **`cart_points(model, pts_2pi_over_a, path=None)`**: Special points given in Cartesian units of 2 pi / a -> reduced.
 * **`chain(t=1.0, eps=0.0)`**: Monatomic chain: E(k) = eps - 2t cos k.
 * **`checkerboard(t=1.0, tp=1.0)`**: Checkerboard (planar pyrochlore) lattice: NN t and crossed-plaquette NNN tp (A along x, B along y). Flat band at E = 2t when tp = t.
+* **`checkerboard_chern(t=1.0, tp=0.3, tpp=-0.2, phi=0.7853981633974483)`**: Flat-band Chern insulator on the checkerboard lattice (Sun, Gu, Katsura & Das Sarma, PRL 106, 236803 (2011); parameters of Sheng, Gu, Sun & Sheng, Nat. Commun. 2, 389 (2011): t' = 0.3, t'' = -0.2, phi = pi/4, gap/bandwidth ~ 27); the host of fractional Chern insulators (Regnault & Bernevig, PRX 1, 021014 (2011)). NN -t e^{i phi s_x s_y}, NNN -/+t' (staggered), diagonal -t''.
 * **`chirality(model, i, j, R, nn_dist, tol=0.0001, search=2)`**: nu_ij = sign((d_ik x d_kj)_z) for the shortest two-step path i -> k -> j through a nearest neighbour k (Haldane / Kane-Mele sign).
 * **`creutz_ladder(t=1.0, theta=1.5707963267948966, mperp=0.0)`**: Creutz ladder (PRL 83, 2636 (1999)): flat bands at +-2t for theta = pi/2, mperp = 0 (Aharonov-Bohm caging).
 * **`cubic(t=1.0)`**: Simple cubic lattice: E = -2t (cos kx + cos ky + cos kz).
@@ -79,6 +82,7 @@ Library of published tight-binding models. See :func:`list_models`.
 * **`kitaev_chain(mu=0.5, t=1.0, delta=1.0)`**: Kitaev p-wave chain in Bogoliubov-de Gennes form (Phys.-Usp. 44, 131 (2001)). Basis (e, h). Topological for |mu| < 2|t|; chiral operator tau_x.
 * **`lieb(t=1.0, delta=0.0)`**: Lieb lattice (CuO2-plane-like): flat band at E = 0 touching a Dirac cone at M. ``delta`` shifts the corner site.
 * **`list_models(dim=None)`**: Print the available models (optionally only one dimension).
+* **`p_ip_superconductor(t=1.0, mu=-1.0, delta=0.5)`**: Spinless chiral p+ip superconductor on the square lattice (Read & Green, PRB 61, 10267 (2000); Bernevig & Hughes, ch. 16), BdG basis (e, h): xi = -2t (cos kx + cos ky) - mu,  Delta_k = delta (sin kx + i sin ky). Weak pairing |mu| < 4t: C = +-1 (sign flips at mu = 0); |mu| > 4t: C = 0.
 * **`p_orbital_square(pps=1.0, ppp=-0.3, pps2=0.3, ppp2=-0.1, lso=0.0, J=0.0)`**: Square lattice of px, py, pz orbitals with Slater-Koster hopping: the standard toy model of the orbital Hall effect (Bhowal & Vignale PRB 103, 195309 (2021); Go et al. PRL 121, 086602 (2018)). Optional on-site lso L.S (spinful) and exchange J along z. NNN bonds (pps2, ppp2) are what hybridise px and py and give a finite orbital Hall conductivity.
 * **`pyrochlore(t=1.0)`**: Pyrochlore lattice (corner-sharing tetrahedra): two flat bands at E = 2t.
 * **`qwz(m_=1.0, t=1.0)`**: Qi-Wu-Zhang Chern insulator (PRB 74, 085308 (2006)): H = t sin kx sx + t sin ky sy + (m + t cos kx + t cos ky) sz. C = +-1 for 0 < |m| < 2t.
@@ -91,6 +95,7 @@ Library of published tight-binding models. See :func:`list_models`.
 * **`ssh(v=0.5, w=1.0)`**: Su-Schrieffer-Heeger chain (PRL 42, 1698 (1979)). Intra-cell hopping v, inter-cell w; topological (winding 1) for |w| > |v|. A at 0, B at 1/2.
 * **`triangular(t=1.0)`**: Triangular lattice.
 * **`weyl_minimal(t=1.0, m_=2.0)`**: Minimal two-band Weyl semimetal with two Weyl nodes at k = (0, 0, +-arccos(m - 2)) (1 < m < 3): H = t[sin kx sx + sin ky sy + (m - cos kx - cos ky - cos kz) sz].
+* **`weyl_type2(t=1.0, m_=2.0, tilt=1.5)`**: Weyl semimetal with a tilt along z (type I for tilt < 1, type II with electron and hole pockets touching at the node for tilt > 1; Soluyanov, Gresch, Wang, Wu, Troyer, Dai & Bernevig, Nature 527, 495 (2015)): H = weyl_minimal + t * tilt * cos(kz) * 1.
 * **`wilson_dirac_ti(A=1.0, B=1.0, M=1.0)`**: Four-band cubic-lattice 3D topological insulator (Bi2Se3-type Wilson-Dirac model, Zhang et al. Nat. Phys. 5, 438 (2009) regularised): H = A sum_i sin k_i tau_x s_i + (M - 2B sum_i (1 - cos k_i)) tau_z. Strong TI (1;000) for 0 < M/B < 4.
 
 ## `hopforge.transport`
@@ -102,13 +107,16 @@ and shot noise, LDOS, scattering wavefunctions, bond currents, arbitrary
 magnetic fields, and parallel sweeps over the cores of a node.
 
 * **`Lead(system, vector, model, cell0, cell1, values, region_values, name)`**: A semi-infinite lead. Cell 0 touches the scattering region; cell j+1 is cell j translated by ``vector``. Matrices are rebuilt for every parameter set (``matrices(params)``).
-* **`SMatrix(system, energy, params=None, eta=1e-10, lead_eta=1e-10)`**: Scattering quantities at one energy. Create with ``system.smatrix(E, params)``.
+* **`SMatrix(system, energy, params=None, eta=1e-10, lead_eta=1e-10, potential=None, lead_shifts=None)`**: Scattering quantities at one energy. Create with ``system.smatrix(E, params)``.
 * **`System(model: 'Model', shape, start=None, onsite=None, peierls=None, hopping=None, max_sites=2000000)`**: Finite scattering region built from a template model and a shape.
 * **`anderson(W, seed=None)`**: On-site function for Anderson disorder of strength W (uniform in [-W/2, W/2]); reproducible per site position and seed.
 * **`andreev_conductance(system, energies, normal_lead=0, electron=None, hole=None, params=None, n_jobs=None)`**: NS-junction conductance (BdG), BTK form G = N_e - R_ee + R_he (e^2/h); parallel over energies. ``electron``/``hole`` are block specs such as dict(orbitals=['A_e']) / dict(orbitals=['A_h']).
+* **`bias_potential(system, bias, axis=0, profile='linear')`**: Potential energy per basis state for a bias V between lead 0 (left, at +V/2 ... electron energy -eV/2) and lead 1: a linear drop along ``axis`` across the scattering region (non-self-consistent), or 'flat' (no drop).
 * **`conductance(system, energies, to_lead=1, from_lead=0, params=None, n_jobs=None, **kw)`**: T(E) between two leads, parallel over energies.
+* **`current(system, bias, mu=0.0, kT=0.0259, n_energy=201, params=None, axis=0, profile='linear', from_lead=0, to_lead=1)`**: Landauer current I(V) = (e/h) int dE T(E, V) [f_L(E) - f_R(E)] in amperes (energies in eV). Lead ``from_lead`` sits at mu + V/2, ``to_lead`` at mu - V/2. The transmission is recomputed at the bias (linear potential drop).
 * **`disorder_average(make_system, seeds, energies, to_lead=1, from_lead=0, n_jobs=None, log=False)`**: Mean and std of T(E) (or ln T) over disorder realisations, in parallel. ``make_system(seed)`` returns a System with leads attached.
 * **`field_gauge(B, lead_axis='x', origin=0.0, nquad=8)`**: Peierls phases for an arbitrary 2D field profile ``B(x, y, **params)`` (phase per unit area), like Kwant's ``magnetic_gauge`` for planar systems.
+* **`iv_curve(system, biases, mu=0.0, kT=0.0259, n_energy=201, params=None, axis=0, profile='linear', n_jobs=None)`**: I(V) for many biases (parallel over biases). Returns amperes.
 * **`landau_gauge(B, lead_axis='x')`**: Peierls phase for a uniform field B (phase per unit area, i.e. B = 2 pi * flux / (flux quantum * area)) in a Landau gauge that is translation invariant along ``lead_axis`` (``'x'``: A = (-B y, 0)).
 * **`plot_current(sys, bonds, J, ax=None, cmap='inferno', title='current', density=None, arrows=True, s=None)`**: Bond currents as coloured lines plus site-averaged current arrows.
 * **`plot_map(sys, values, ax=None, cmap='viridis', s=None, title='', colorbar=True, vmin=None, vmax=None)`**: Colour every site by a value (e.g. LDOS or density from a lead).
@@ -150,10 +158,13 @@ Linear and nonlinear response beyond the Hall conductivity.
 * **`chunks_for(n_items, n_jobs, per_job=4)`**: Number of chunks: a few per worker for load balancing.
 * **`drude_weight(model, mu, kT=0.01, nk=80, n_jobs=None)`**: Intraband (Drude) weight sigma/tau at chemical potential mu (natural units).
 * **`edelstein(model, operator, field='x', mu=0.0, kT=0.01, tau=1.0, nk=100, eta=0.0001, part='both', n_jobs=None)`**: Current-induced polarisation of ``operator`` (spin s_a, orbital L_a, ...) per unit electric field along ``field``, per unit cell.
+* **`kubo_streda(model, operator, field='x', mu=0.0, Gamma=0.01, nk=100, n_jobs=None, fermi_sea=True)`**: Linear response delta<A> per unit field of a (Hermitian) operator A (spin, orbital, torque, spin/orbital current ...), per unit cell, with a constant band broadening Gamma (e = hbar = 1):
+* **`layer_operator(model, orbitals, base)`**: Restrict an operator (e.g. model.spin_operator('y') or model.orbital_operator('y')) to a set of orbitals (a layer / atom type): P A P with P the orbital projector.
 * **`optical_conductivity(model, omegas, mu=0.0, kT=0.0, nk=100, eta=0.02, component='xx', drude_tau=None, n_jobs=None)`**: Kubo-Greenwood optical conductivity sigma_ab(omega) (complex, units e^2/hbar * length^(2-d); 2D: divide by 2 pi for e^2/h):
 * **`orbital_magnetization(model, mu=0.0, kT=0.0, nk=100, component='xy', n_jobs=None)`**: Modern theory of orbital magnetisation (Xiao 2005, Thonhauser 2005, Ceresoli 2006) per unit cell:     M = (1/N_k) sum_nk f_n [ m_n + (mu - E_n) Omega_n ] (units e/hbar * energy * length^2; x MU_B_PER_UNIT -> mu_B per cell). In a Chern-insulator gap dM/dmu = C * A_cell / (2 pi) (Streda).
 * **`orbital_moment(model, k, component='xy', eta=0.0)`**: Band-resolved orbital moment m_n^{ab}(k) = -Im sum_{m!=n} v^a_nm v^b_mn / (E_n - E_m) (units e/hbar * energy * length^2; multiply by MU_B_PER_UNIT for Bohr magnetons with eV and Angstrom). For two bands m_n = (E_n - E_m) Omega_n / 2. Returns (E, Omega, m) arrays (nk, nb).
 * **`split(array, n_parts)`**: Split an array (e.g. a k-mesh) into ~equal contiguous chunks.
+* **`torkance(model, magnetization, Jex, field='x', mu=0.0, Gamma=0.01, nk=100, orbitals=None, n_jobs=None)`**: Spin-orbit torque per unit field on the magnetisation m, from the current-induced spin density on the magnetic ``orbitals`` (default: all):
 
 ## `hopforge.meanfield`
 

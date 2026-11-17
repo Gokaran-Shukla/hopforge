@@ -274,3 +274,99 @@ def optical_conductivity(model, omegas, mu=0.0, kT=0.0, nk=100, eta=0.02, compon
         Dw = boltzmann(model, mu, max(kT, 1e-3), nk, n_jobs).sigma_over_tau[0][a, b]
         sigma = sigma + Dw / (1.0 / drude_tau - 1j * oms)
     return sigma
+
+
+# ---------------------------------------------------------------------------
+# Kubo-Streda / Kubo-Bastin responses with constant broadening:
+# spin-orbit torques, orbital torques, self-torques (Freimuth, Bluegel &
+# Mokrousov, PRB 90, 174423 (2014); Go et al., PRB 103, L121113 (2021);
+# Go, ... & Mokrousov self-torque)
+# ---------------------------------------------------------------------------
+def kubo_streda(model, operator, field="x", mu=0.0, Gamma=0.01, nk=100, n_jobs=None,
+                fermi_sea=True):
+    """Linear response delta<A> per unit field of a (Hermitian) operator A
+    (spin, orbital, torque, spin/orbital current ...), per unit cell, with a
+    constant band broadening Gamma (e = hbar = 1):
+
+    Fermi surface (Kubo-Streda I, ~1/Gamma, TRS-even part of SOTs):
+        chi_I = (1/2pi N) sum_k Re Tr[A G^R v G^A - A G^R v G^R]   at E = mu
+              -> Boltzmann with tau = 1/(2 Gamma) for Gamma -> 0
+    Fermi sea (interband, Gamma-independent for small Gamma, intrinsic):
+        chi_II = -2 (1/N) sum_n f_n sum_{m!=n} Im[A_nm v_mn] E-denominators
+    Returns dict(fermi_surface, fermi_sea, total) arrays over mu."""
+    mus = np.atleast_1d(np.asarray(mu, float))
+    b = _ax(field)
+    A = np.asarray(operator)
+
+    def f(E, V, vb):
+        Ab = np.einsum("kin,ij,kjm->knm", V.conj(), A, V, optimize=True)
+        vbb = vb[b]
+        out = np.zeros((2, len(mus)))
+        dE = E[:, :, None] - E[:, None, :]
+        nbands = E.shape[1]
+        off = ~np.eye(nbands, dtype=bool)[None]
+        sea_term = np.where(off, np.imag(Ab * vbb.transpose(0, 2, 1)) / (dE ** 2 + Gamma ** 2), 0.0).sum(2)
+        X = Ab * vbb.transpose(0, 2, 1)                 # A_nm v_mn
+        for i, u in enumerate(mus):
+            gR = 1.0 / (u - E + 1j * Gamma)             # (k, n)
+            gA = gR.conj()
+            # Tr[A G^R v G^A] = sum_nm A_nm gR_m v_mn gA_n
+            t1 = np.einsum("knm,km,kn->", X, gR, gA)
+            t2 = np.einsum("knm,km,kn->", X, gR, gR)
+            out[0, i] = np.real(t1 - t2) / (2 * np.pi)
+            if fermi_sea:
+                out[1, i] = -2 * np.sum((E < u) * sea_term)
+        return out
+    tot, Nk = _kloop(model, nk, f, n_jobs)
+    fs, sea = tot / Nk
+    return dict(mu=mus, fermi_surface=fs, fermi_sea=sea, total=fs + sea)
+
+
+def torkance(model, magnetization, Jex, field="x", mu=0.0, Gamma=0.01, nk=100, orbitals=None,
+             n_jobs=None):
+    """Spin-orbit torque per unit field on the magnetisation m, from the
+    current-induced spin density on the magnetic ``orbitals`` (default: all):
+
+        T = Jex * m x delta<sigma>   (delta<sigma> from :func:`kubo_streda`)
+
+    Returns dict with 'fermi_surface' and 'fermi_sea' torque vectors (nmu, 3),
+    plus their decomposition on the field-like (m x y_hat) and damping-like
+    (m x (y_hat x m)) directions for E along ``field`` and y_hat = z x E_hat."""
+    mvec = np.asarray(magnetization, float)
+    mvec = mvec / np.linalg.norm(mvec)
+    ns = model.ns
+    if ns != 2:
+        raise ValueError("torkance needs a spinful model")
+    P = np.ones(model.norb) if orbitals is None else np.zeros(model.norb)
+    if orbitals is not None:
+        for i in model._orb_list(orbitals):
+            P[i] = 1
+    paulis = [np.array([[0, 1], [1, 0]]), np.array([[0, -1j], [1j, 0]]), np.diag([1.0, -1.0])]
+    res = {"fermi_surface": [], "fermi_sea": []}
+    for a in range(3):
+        Op = np.kron(np.diag(P), paulis[a])
+        r = kubo_streda(model, Op, field, mu, Gamma, nk, n_jobs)
+        res["fermi_surface"].append(r["fermi_surface"])
+        res["fermi_sea"].append(r["fermi_sea"])
+    out = {"mu": np.atleast_1d(mu)}
+    e = np.zeros(3); e[_ax(field)] = 1
+    yhat = np.cross([0, 0, 1], e)
+    yhat = yhat / (np.linalg.norm(yhat) or 1)
+    fl_dir = np.cross(mvec, yhat)
+    dl_dir = np.cross(mvec, np.cross(yhat, mvec))
+    for k in ("fermi_surface", "fermi_sea"):
+        ds = np.array(res[k]).T                          # (nmu, 3) delta<sigma>
+        T = Jex * np.cross(mvec[None], ds)
+        out[k] = T
+        out[k + "_FL"] = T @ fl_dir / (np.linalg.norm(fl_dir) ** 2 or 1)
+        out[k + "_DL"] = T @ dl_dir / (np.linalg.norm(dl_dir) ** 2 or 1)
+        out["delta_sigma_" + k] = ds
+    return out
+
+
+def layer_operator(model, orbitals, base):
+    """Restrict an operator (e.g. model.spin_operator('y') or
+    model.orbital_operator('y')) to a set of orbitals (a layer / atom type):
+    P A P with P the orbital projector."""
+    Pm = model.projector(orbitals)
+    return Pm @ np.asarray(base) @ Pm

@@ -499,3 +499,87 @@ def register_model(name, dim, description=""):
         REGISTRY[name] = (func, dim, description)
         return func
     return deco
+
+
+# ===========================================================================
+# B. A. Bernevig and collaborators: higher-order, superconducting, Weyl-II,
+# flat Chern bands (Bistritzer-MacDonald moire bands live in hopforge.moire)
+# ===========================================================================
+def _gammas_bbh():
+    t1 = np.array([[0, 1], [1, 0]], complex)
+    t2 = np.array([[0, -1j], [1j, 0]], complex)
+    t3 = np.diag([1.0, -1.0]).astype(complex)
+    G0 = np.kron(t3, s0)
+    G1, G2, G3 = (-np.kron(t2, s) for s in (sx, sy, sz))
+    G4 = np.kron(t1, s0)
+    return G0, G1, G2, G3, G4
+
+
+def bbh_quadrupole(gamma=0.5, lam=1.0, delta=0.0):
+    """Benalcazar-Bernevig-Hughes quadrupole insulator (Science 357, 61 (2017)):
+    H = (g + l cos kx) G4 + l sin kx G3 + (g + l cos ky) G2 + l sin ky G1 + d G0.
+    Quadrupole phase (q_xy = 1/2, corner charges +-e/2) for |g/l| < 1.
+    Four orbitals per cell (pi flux per plaquette); delta breaks chiral symmetry."""
+    G0, G1, G2, G3, G4 = _gammas_bbh()
+    lat = Lattice([[1, 0], [0, 1]], [(f"o{i}", [0, 0]) for i in range(4)])
+    m = Model(lat, name="BBH quadrupole")
+    o = [f"o{i}" for i in range(4)]
+    m.add_onsite_matrix(gamma * (G4 + G2) + delta * G0, o)
+    m.add_hopping_matrix(0.5 * lam * G4 - 0.5j * lam * G3, o, o, [1, 0])
+    m.add_hopping_matrix(0.5 * lam * G2 - 0.5j * lam * G1, o, o, [0, 1])
+    return set_points(m, SQ_POINTS, ["G", "X", "M", "G"])
+
+
+def p_ip_superconductor(t=1.0, mu=-1.0, delta=0.5):
+    """Spinless chiral p+ip superconductor on the square lattice (Read & Green,
+    PRB 61, 10267 (2000); Bernevig & Hughes, ch. 16), BdG basis (e, h):
+    xi = -2t (cos kx + cos ky) - mu,  Delta_k = delta (sin kx + i sin ky).
+    Weak pairing |mu| < 4t: C = +-1 (sign flips at mu = 0); |mu| > 4t: C = 0."""
+    lat = Lattice([[1, 0], [0, 1]], [("e", [0, 0]), ("h", [0, 0])])
+    m = Model(lat, name="p+ip superconductor")
+    m.add_onsite(-mu, "e").add_onsite(mu, "h")
+    for R in ([1, 0], [0, 1]):
+        m.add_hopping(-t, "e", "e", R).add_hopping(t, "h", "h", R)
+    # delta sin kx  and  i delta sin ky in the e-h block
+    m.add_hopping(delta / 2j, "e", "h", [1, 0]).add_hopping(-delta / 2j, "e", "h", [-1, 0])
+    m.add_hopping(delta / 2, "e", "h", [0, 1]).add_hopping(-delta / 2, "e", "h", [0, -1])
+    return set_points(m, SQ_POINTS, ["G", "X", "M", "G"])
+
+
+def weyl_type2(t=1.0, m_=2.0, tilt=1.5):
+    """Weyl semimetal with a tilt along z (type I for tilt < 1, type II with
+    electron and hole pockets touching at the node for tilt > 1; Soluyanov,
+    Gresch, Wang, Wu, Troyer, Dai & Bernevig, Nature 527, 495 (2015)):
+    H = weyl_minimal + t * tilt * cos(kz) * 1."""
+    m = weyl_minimal(t, m_)
+    m.name = f"Weyl (tilt {tilt})"
+    m.add_hopping_matrix(0.5 * t * tilt * np.eye(2), ["a", "b"], ["a", "b"], [0, 0, 1])
+    return m
+
+
+def checkerboard_chern(t=1.0, tp=0.3, tpp=-0.2, phi=np.pi / 4):
+    """Flat-band Chern insulator on the checkerboard lattice (Sun, Gu, Katsura &
+    Das Sarma, PRL 106, 236803 (2011); parameters of Sheng, Gu, Sun & Sheng,
+    Nat. Commun. 2, 389 (2011): t' = 0.3, t'' = -0.2, phi = pi/4, gap/bandwidth
+    ~ 27); the host of fractional Chern insulators (Regnault & Bernevig, PRX 1,
+    021014 (2011)). NN -t e^{i phi s_x s_y}, NNN -/+t' (staggered), diagonal -t''."""
+    lat = Lattice([[1, 0], [0, 1]], [("A", [0, 0]), ("B", [0.5, 0.5])])
+    m = Model(lat, name="checkerboard Chern")
+    # NN A -> B bonds d = (sx, sy)/2 with amplitude -t exp(i phi sx sy)
+    for sxx in (1, -1):
+        for syy in (1, -1):
+            R = [0 if sxx > 0 else -1, 0 if syy > 0 else -1]
+            m.add_hopping(-t * np.exp(1j * phi * sxx * syy), "A", "B", R)
+    m.add_hopping(-tp, "A", "A", [1, 0]).add_hopping(tp, "A", "A", [0, 1])
+    m.add_hopping(tp, "B", "B", [1, 0]).add_hopping(-tp, "B", "B", [0, 1])
+    for o in ("A", "B"):
+        m.add_hopping(-tpp, o, o, [1, 1]).add_hopping(-tpp, o, o, [1, -1])
+    return set_points(m, SQ_POINTS, ["G", "X", "M", "G"])
+
+
+REGISTRY.update({
+    "bbh_quadrupole": (bbh_quadrupole, 2, "Benalcazar-Bernevig-Hughes quadrupole HOTI"),
+    "p_ip_superconductor": (p_ip_superconductor, 2, "chiral p+ip superconductor (Read-Green)"),
+    "weyl_type2": (weyl_type2, 3, "type-I/II Weyl semimetal (Soluyanov-Bernevig)"),
+    "checkerboard_chern": (checkerboard_chern, 2, "flat Chern band (FCI host, Sun/Neupert/Regnault-Bernevig)"),
+})

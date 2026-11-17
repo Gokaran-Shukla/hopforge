@@ -297,3 +297,43 @@ def winding_number(model, chiral, nk=400):
     d = np.linalg.det(q)
     ph = np.unwrap(np.angle(np.concatenate([d, d[:1]])))
     return float((ph[-1] - ph[0]) / (2 * np.pi))
+
+
+def nested_wilson_loop(model, occ, direction=0, nk=60, nperp=60, branch=+1):
+    """Nested Wilson loop for multipole insulators (Benalcazar, Bernevig &
+    Hughes, Science 357, 61 (2017)). The Wilson loop along ``direction`` gives
+    Wannier bands nu(k_perp); the Berry phase of the Wannier sector with
+    nu > 0 (``branch=+1``) along k_perp is the Wannier-sector polarisation
+    p^{nu}, which is 1/2 in the quadrupole phase. Returns p in [0, 1)."""
+    if model.dim != 2:
+        raise ValueError("nested_wilson_loop is implemented for 2D models")
+    perp = 1 - direction
+    sel = _bands_sel(model, occ)
+    G = np.zeros(2)
+    G[direction] = 1
+    kps = np.linspace(0, 1, nperp, endpoint=False)
+    W_states = []
+    for kp in kps:
+        k0 = np.zeros(2)
+        k0[perp] = kp
+        # periodic gauge for the nested construction
+        t = np.linspace(0, 1, nk, endpoint=False)
+        _, V = model.eig(k0[None] + t[:, None] * G[None], gauge="periodic")
+        V = V[:, :, sel]
+        W = np.eye(len(sel), dtype=complex)
+        for i in range(nk):
+            M = V[i].conj().T @ V[(i + 1) % nk]
+            u, _, vh = np.linalg.svd(M)
+            W = W @ (u @ vh)
+        ev, vec = np.linalg.eig(W)
+        nu = -np.angle(ev) / (2 * np.pi)
+        pick = np.argsort(-branch * nu)[: len(sel) // 2]
+        # Wannier-sector state at the base point: sum_n vec[n, j] |u_n(k0)>
+        W_states.append(V[0] @ vec[:, pick])
+    Wm = np.eye(W_states[0].shape[1], dtype=complex)
+    for i in range(nperp):
+        M = W_states[i].conj().T @ W_states[(i + 1) % nperp]
+        u, _, vh = np.linalg.svd(M)
+        Wm = Wm @ (u @ vh)
+    p = float((-np.angle(np.linalg.det(Wm)) / (2 * np.pi)) % 1.0)
+    return 0.0 if p > 1 - 1e-8 else p

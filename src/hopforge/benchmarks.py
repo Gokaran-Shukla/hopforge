@@ -520,6 +520,270 @@ def _floquet():
 
 
 # =============================================================================
+# strongly correlated systems (exact diagonalisation)
+# =============================================================================
+@benchmark("Hubbard dimer", "E0 = (U - sqrt(U^2 + 16 t^2)) / 2", "textbook two-site Hubbard model (e.g. Fazekas, ch. 5)")
+def _dimer():
+    import hopforge as hf
+    out = []
+    for U in (0.0, 4.0, 20.0):
+        ed = hf.manybody.Hubbard(hf.models.chain().finite(2), U=U)
+        out.append(ed.ground_state(1, 1)[0])
+    pub = [(U - np.sqrt(U * U + 16)) / 2 for U in (0.0, 4.0, 20.0)]
+    return [round(x, 6) for x in pub], [round(x, 6) for x in out], _close(out, pub, 1e-10)
+
+
+@benchmark("4x4 Heisenberg antiferromagnet", "E0 = -11.228483 J (periodic)",
+           "Schulz, Ziman & Poilblanc, J. Phys. I 6, 675 (1996)")
+def _heis44():
+    import hopforge as hf
+    sq = hf.models.square().supercell([4, 4])
+    E = hf.manybody.SpinModel.from_model(sq, (1.0,)).ground_state()[0]
+    return -11.228483, round(E, 6), _close(E, -11.228483, 1e-6)
+
+
+@benchmark("Heisenberg chain and Bethe ansatz", "E0(L=16) = -7.142296 J; e_inf = 1/4 - ln 2",
+           "Hulthen (1938); Bethe (1931)")
+def _heis_chain():
+    import hopforge as hf
+    E16 = hf.manybody.SpinModel.chain(16).ground_state()[0]
+    Ls = [12, 16, 20]
+    e = [hf.manybody.SpinModel.chain(L).ground_state()[0] / L for L in Ls]
+    c = np.polyfit(1 / np.array(Ls) ** 2, e, 1)
+    return (-7.142296, round(0.25 - np.log(2), 5)), (round(E16, 6), round(c[1], 5)), \
+        _close(E16, -7.142296, 1e-6) and abs(c[1] - (0.25 - np.log(2))) < 2e-3
+
+
+@benchmark("Majumdar-Ghosh point", "E0 = -3 L J1 / 8 at J2 = J1/2 (exact dimer state)",
+           "Majumdar & Ghosh, J. Math. Phys. 10, 1388 (1969)")
+def _mg():
+    import hopforge as hf
+    E = hf.manybody.SpinModel.chain(16, 1.0, 0.5).ground_state()[0]
+    return -6.0, round(E, 8), _close(E, -6.0, 1e-8)
+
+
+@benchmark("Kanamori atom multiplets", "two electrons in two orbitals: U-3J (x3), U-J (x2), U+J",
+           "Kanamori, Prog. Theor. Phys. 30, 275 (1963); Georges, de' Medici & Mravlje, ARCMP 4, 137 (2013)")
+def _kanamori():
+    import hopforge as hf
+    from hopforge.model import Lattice, Model
+    at = Model(Lattice(None, [("a", [0, 0]), ("b", [0, 0])]), name="atom")
+    U, J = 4.0, 0.8
+    ed = hf.manybody.Hubbard(at, U=U, J=J, atoms=[[0, 1]])
+    E = np.sort(np.concatenate([np.linalg.eigvalsh(ed.hamiltonian(1, 1).toarray()),
+                                np.linalg.eigvalsh(ed.hamiltonian(2, 0).toarray()),
+                                np.linalg.eigvalsh(ed.hamiltonian(0, 2).toarray())]))
+    pub = [U - 3 * J] * 3 + [U - J] * 2 + [U + J]
+    return pub, [round(x, 6) for x in E], _close(E, pub, 1e-9)
+
+
+@benchmark("Transverse-field Ising chain", "ED = exact free-fermion energy; c = 1/2 at h = J",
+           "Pfeuty, Ann. Phys. 57, 79 (1970); Calabrese & Cardy, J. Stat. Mech. P06002 (2004)")
+def _tfim():
+    import hopforge as hf
+    MB, PH = hf.manybody, hf.phases
+    E = MB.PauliModel.transverse_field_ising(12, 1.0, 0.7).ground_state()[0]
+    Eex = MB.tfim_exact_energy(12, 1.0, 0.7)
+    psi = MB.PauliModel.transverse_field_ising(16, 1.0, 1.0).ground_state()[1]
+    c = PH.central_charge(psi, 16)[0]
+    return (round(Eex, 8), 0.5), (round(E, 8), round(c, 3)), abs(E - Eex) < 1e-9 and abs(c - 0.5) < 0.02
+
+
+@benchmark("Quantum Ising critical point (Binder crossing)", "h_c = J",
+           "Pfeuty (1970); Sachdev, Quantum Phase Transitions (2011)")
+def _binder():
+    import hopforge as hf
+    MB, PH = hf.manybody, hf.phases
+    sc = PH.quantum_critical_scan(lambda L, h: MB.PauliModel.transverse_field_ising(L, 1.0, h), "h",
+                                  np.linspace(0.8, 1.2, 17), Ls=(10, 14))
+    hc = PH.binder_crossing(sc)
+    return 1.0, round(hc, 3), abs(hc - 1.0) < 0.05
+
+
+@benchmark("SYK ground-state energy", "E0/N -> -0.0406 J (large N, q = 4)",
+           "Maldacena & Stanford, PRD 94, 106002 (2016); Garcia-Garcia & Verbaarschot, PRD 94, 126010 (2016)")
+def _syk_energy():
+    import hopforge as hf
+    Ns = [14, 16, 18, 20, 22]
+    E = [np.mean([hf.manybody.SYK(N, seed=s).ground_energy() / N for s in range(8)]) for N in Ns]
+    c = np.polyfit(1 / np.array(Ns), E, 2)
+    return -0.0406, round(c[-1], 4), abs(c[-1] + 0.0406) < 0.003
+
+
+@benchmark("SYK level statistics", "<r>: GOE 0.531 (N=16), GUE 0.600 (N=18), GSE 0.674 (N=20)",
+           "You, Ludwig & Xu, PRB 95, 115150 (2017); Atas et al., PRL 110, 084101 (2013)")
+def _syk_r():
+    import hopforge as hf
+    r = [hf.manybody.syk_level_statistics(N, realizations=12) for N in (16, 18, 20)]
+    pub = [0.5307, 0.5996, 0.6744]
+    return pub, [round(x, 3) for x in r], _close(r, pub, 0.02)
+
+
+@benchmark("Bose-Hubbard Mott lobe tip (mean field)", "(U/zt)_c = 3 + 2 sqrt(2) = 5.828 for n = 1",
+           "Fisher, Weichman, Grinstein & Fisher, PRB 40, 546 (1989); Sachdev, QPT ch. 9")
+def _bh():
+    import hopforge as hf
+    MB = hf.manybody
+    mu = np.sqrt(2) - 1
+    lo = MB.bose_hubbard_meanfield(1.0, 1 / 5.75, mu)[0]
+    hi = MB.bose_hubbard_meanfield(1.0, 1 / 5.90, mu)[0]
+    return round(3 + 2 * np.sqrt(2), 4), (f"psi(5.75)={lo:.3f}", f"psi(5.90)={hi:.1e}"), lo > 1e-2 and hi < 1e-4
+
+
+@benchmark("Stoner criterion", "ferromagnetism for U > 1 / rho(E_F)", "Stoner, Proc. R. Soc. A 165, 372 (1938)")
+def _stoner():
+    import hopforge as hf
+    sq = hf.models.square(t2=-0.3)
+    Uc, _ = hf.phases.stoner_critical_U(sq, 0.3, nk=300, sigma=0.02)
+    m = [abs(hf.meanfield.hubbard(sq.make_spinful(), f * Uc, filling=0.3, init="ferro", nk=100, kT=0.005,
+                                  maxiter=3000, mixing=0.3).moments[0, 2]) for f in (0.85, 1.2)]
+    return "m = 0 below U_c, m > 0 above", [round(x, 4) for x in m], m[0] < 1e-3 and m[1] > 0.1
+
+
+# =============================================================================
+# Bernevig / Vishwanath models
+# =============================================================================
+@benchmark("BBH quadrupole insulator", "nested Wilson loop p^nu = 1/2; corner charge e/2",
+           "Benalcazar, Bernevig & Hughes, Science 357, 61 (2017)")
+def _bbh():
+    import hopforge as hf
+    b = hf.models.bbh_quadrupole(gamma=0.5)
+    p = hf.nested_wilson_loop(b, 2, 0, nk=60, nperp=60)
+    pt = hf.nested_wilson_loop(hf.models.bbh_quadrupole(gamma=1.5), 2, 0, nk=60, nperp=60)
+    f = hf.models.bbh_quadrupole(gamma=0.5, delta=1e-3).finite(16)
+    E, V = np.linalg.eigh(f.hamiltonian())
+    cell = (np.abs(V[:, :f.nbands // 2]) ** 2).sum(1).reshape(-1, 4).sum(1)
+    Pc = f.lat.positions[::4]
+    q = abs((cell[(Pc[:, 0] > 7.5) & (Pc[:, 1] > 7.5)] - 2).sum())
+    return (0.5, 0.0, 0.5), (round(p, 4), round(pt, 4), round(q, 3)), \
+        abs(p - 0.5) < 1e-6 and abs(pt) < 1e-6 and abs(q - 0.5) < 0.01
+
+
+@benchmark("Chiral p+ip superconductor", "C = 0, +1, -1, 0 for mu = -5, -2, 2, 5 (t = 1)",
+           "Read & Green, PRB 61, 10267 (2000); Bernevig & Hughes (2013), ch. 16")
+def _pip():
+    import hopforge as hf
+    C = [round(hf.chern_number(hf.models.p_ip_superconductor(mu=mu), 1, 40)) for mu in (-5, -2, 2, 5)]
+    ok = C[0] == 0 and C[3] == 0 and abs(C[1]) == 1 and C[2] == -C[1]
+    return [0, 1, -1, 0], C, ok
+
+
+@benchmark("Type-II Weyl semimetal", "DOS(E_W) = 0 for type I, finite for type II (tilt > velocity)",
+           "Soluyanov et al. (incl. Bernevig), Nature 527, 495 (2015)")
+def _weyl2():
+    import hopforge as hf
+    out = []
+    for tilt in (0.5, 1.5):
+        d = hf.dos(hf.models.weyl_type2(tilt=tilt), nk=40, energies=[0.0], sigma=0.02).dos[0]
+        out.append(round(d, 4))
+    return "type I ~0, type II > 0", out, out[0] < 0.2 * out[1] and out[1] > 0.05
+
+
+@benchmark("Flat Chern band (checkerboard)", "C = 1, gap/bandwidth ~ 27 (nearly flat)",
+           "Sun, Gu, Katsura & Das Sarma, PRL 106, 236803 (2011); Sheng et al., Nat. Commun. 2, 389 (2011)")
+def _flatband():
+    import hopforge as hf
+    cb = hf.models.checkerboard_chern()
+    E = cb.energies(hf.kmesh(cb, 80))
+    fl = (E[:, 1].min() - E[:, 0].max()) / np.ptp(E[:, 0])
+    C = round(hf.chern_number(cb, 1, 40))
+    return (1, "~27"), (abs(C), round(fl, 1)), abs(C) == 1 and fl > 20
+
+
+@benchmark("Fractional Chern insulator (ED)", "3-fold quasi-degenerate ground state at nu = 1/3",
+           "Regnault & Bernevig, PRX 1, 021014 (2011); Sheng et al., Nat. Commun. 2, 389 (2011)")
+def _fci():
+    import hopforge as hf
+    sc = hf.models.checkerboard_chern().supercell([3, 4])
+    E = hf.manybody.Fermions(sc, V=[1.0]).spectrum(4, k=6)
+    spread, gap = E[2] - E[0], E[3] - E[2]
+    return "spread << gap", (round(spread, 4), round(gap, 4)), gap > 3 * spread
+
+
+@benchmark("Chiral twisted bilayer graphene: magic angle", "first magic alpha = 0.586 (Dirac velocity vanishes)",
+           "Tarnopolsky, Kruchkov & Vishwanath, PRL 122, 106405 (2019)")
+def _tkv():
+    import hopforge as hf
+    a = hf.moire.magic_angles(0.0, alpha_max=0.7, n=19)
+    return 0.586, [round(x, 4) for x in a], len(a) >= 1 and abs(a[0] - 0.586) < 0.002
+
+
+@benchmark("Bistritzer-MacDonald velocity renormalisation", "v*/v = (1 - 3 a^2)/(1 + 6 a^2) for small a",
+           "Bistritzer & MacDonald, PNAS 108, 12233 (2011)")
+def _bm():
+    import hopforge as hf
+    a = 0.1
+    v = hf.moire.BistritzerMacDonald(a, 1.0).dirac_velocity()
+    pub = (1 - 3 * a * a) / (1 + 6 * a * a)
+    return round(pub, 4), round(v, 4), abs(v - pub) < 0.005
+
+
+@benchmark("Commensurate twisted bilayer graphene", "theta(m=1,2,3) = 21.787, 13.174, 9.430 deg; 4(3m^2+3m+1) atoms",
+           "Lopes dos Santos, Peres & Castro Neto, PRL 99, 256802 (2007)")
+def _tbg_comm():
+    import hopforge as hf
+    g = hf.moire.graphene_layer()
+    th, n = [], []
+    for mi in (1, 2, 3):
+        tb, t = hf.moire.twisted_bilayer(g, mi, 1, interlayer=hf.moire.moon_koshino())
+        th.append(round(t, 3)); n.append(tb.norb)
+    return ([21.787, 13.174, 9.430], [28, 76, 148]), (th, n), \
+        _close(th, [21.787, 13.174, 9.430], 2e-3) and n == [28, 76, 148]
+
+
+@benchmark("Real-space TBG vs continuum", "Dirac point preserved; v*/v within 6% of BM (w = 0.11 eV) at 7.3 deg",
+           "Moon & Koshino, PRB 85, 195458 (2012); Trambly de Laissardiere et al., Nano Lett. 10, 804 (2010)")
+def _tbg_v():
+    import hopforge as hf
+    g = hf.moire.graphene_layer()
+    tb, th = hf.moire.twisted_bilayer(g, 4, 1, interlayer=hf.moire.moon_koshino())
+    v0 = 3 * 2.7 * (2.46 / np.sqrt(3)) / 2
+    cands = [np.array(c) for c in [(1 / 3, 1 / 3), (2 / 3, 2 / 3), (1 / 3, 2 / 3), (2 / 3, 1 / 3)]]
+    gaps = []
+    for c in cands:
+        E = np.linalg.eigvalsh(tb.hamiltonian(c)); n = len(E) // 2
+        gaps.append(E[n] - E[n - 1])
+    K = cands[int(np.argmin(gaps))]
+    B = tb.lat.reciprocal
+    dk = 1e-4
+    Kp = np.linalg.lstsq(B.T, K @ B + np.array([dk, 0, 0]), rcond=None)[0]
+    E = np.linalg.eigvalsh(tb.hamiltonian(Kp)); n = len(E) // 2
+    v = (E[n] - E[n - 1]) / (2 * dk) / v0
+    kth = 2 * (4 * np.pi / (3 * 2.46)) * np.sin(np.radians(th) / 2)
+    a = 0.11 / (v0 * kth)
+    bm = (1 - 3 * a * a) / (1 + 6 * a * a)
+    return round(bm, 4), (round(v, 4), f"gap(K)={min(gaps):.1e}"), abs(v / bm - 1) < 0.06 and min(gaps) < 1e-3
+
+
+# =============================================================================
+# spin-orbit torques
+# =============================================================================
+@benchmark("Rashba spin-orbit torque symmetry", "extrinsic (Fermi surface) torque field-like, intrinsic (Fermi sea) damping-like",
+           "Kurebayashi et al., Nat. Nanotech. 9, 211 (2014); Freimuth, Bluegel & Mokrousov, PRB 90, 174423 (2014)")
+def _sot():
+    import hopforge as hf
+    fm = hf.models.rashba_square(alpha=0.3, J=0.5)
+    T = hf.response.torkance(fm, (0, 0, 1), 0.5, "x", mu=-2.0, Gamma=0.02, nk=150)
+    fs_fl, fs_dl = abs(T["fermi_surface_FL"][0]), abs(T["fermi_surface_DL"][0])
+    se_fl, se_dl = abs(T["fermi_sea_FL"][0]), abs(T["fermi_sea_DL"][0])
+    return "FS: FL >> DL; sea: DL >> FL", (round(fs_fl, 4), round(fs_dl, 4), round(se_fl, 6), round(se_dl, 4)), \
+        fs_fl > 20 * fs_dl and se_dl > 20 * se_fl
+
+
+@benchmark("Kubo-Streda -> Boltzmann limit", "Fermi-surface term = Boltzmann with tau = 1/(2 Gamma) (within 8%)",
+           "Bastin et al., J. Phys. Chem. Solids 32, 1811 (1971); Streda (1982)")
+def _ks_limit():
+    import hopforge as hf
+    R = hf.response
+    r = hf.models.rashba_square(alpha=0.3)
+    G = 0.02
+    ks = R.kubo_streda(r, r.spin_operator("y"), "x", mu=-2.0, Gamma=G, nk=600, fermi_sea=False)["fermi_surface"][0]
+    bz = R.edelstein(r, r.spin_operator("y"), "x", mu=-2.0, kT=0.01, tau=1 / (2 * G), nk=600)["extrinsic"][0]
+    # the Boltzmann reference carries thermal smearing (kT) and mesh noise of a few %
+    return 1.0, round(ks / bz, 4), abs(ks / bz - 1) < 0.08
+
+
+# =============================================================================
 # helpers
 # =============================================================================
 def silicon_vogl(a=5.431):
@@ -601,8 +865,9 @@ def markdown(results):
            "| # | Benchmark | Quantity | Published | hopforge | Status | Reference |",
            "|---|---|---|---|---|---|---|"]
     for i, r in enumerate(results, 1):
-        out.append(f"| {i} | {r.name} | {r.quantity} | {r.published} | {r.value} | "
-                   f"{'pass' if r.passed else 'FAIL'} | {r.reference} |")
+        esc = lambda x: str(x).replace("|", "\\|")
+        out.append(f"| {i} | {esc(r.name)} | {esc(r.quantity)} | {esc(r.published)} | {esc(r.value)} | "
+                   f"{'pass' if r.passed else 'FAIL'} | {esc(r.reference)} |")
     return "\n".join(out) + "\n"
 
 

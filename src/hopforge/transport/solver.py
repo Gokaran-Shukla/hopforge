@@ -22,7 +22,8 @@ from ..parallel import pmap
 class SMatrix:
     """Scattering quantities at one energy. Create with ``system.smatrix(E, params)``."""
 
-    def __init__(self, system, energy, params=None, eta=1e-10, lead_eta=1e-10):
+    def __init__(self, system, energy, params=None, eta=1e-10, lead_eta=1e-10, potential=None,
+                 lead_shifts=None):
         if not system.leads:
             raise ValueError("attach at least one lead first")
         self.sys = system
@@ -30,12 +31,16 @@ class SMatrix:
         self.params = params
         H = system.hamiltonian(params)
         N = system.nbasis
+        if potential is not None:
+            # electrostatic potential energy per basis state (e.g. a bias ramp)
+            H = H + sp.diags(np.asarray(potential, complex))
+        self.lead_shifts = lead_shifts or [0.0] * len(system.leads)
         A = (energy + 1j * eta) * sp.identity(N, dtype=complex, format="csr") - H
         self.Sigma, self.Gamma, self.iface = [], [], []
         rows, cols, vals = [], [], []
-        for L in system.leads:
+        for li, L in enumerate(system.leads):
             idx = L.matrices(params)[3]
-            S = L.self_energy(energy, params, eta=lead_eta)
+            S = L.self_energy(energy - self.lead_shifts[li], params, eta=lead_eta)
             self.Sigma.append(S)
             self.Gamma.append(1j * (S - S.conj().T))
             self.iface.append(idx)
@@ -278,3 +283,46 @@ def spectrum(system, params_list=None, k=10, sigma=0.0, n_jobs=None, dense=None)
             return np.linalg.eigvalsh(H.toarray())
         return np.sort(spla.eigsh(H, k=k, sigma=sigma, return_eigenvectors=False).real)
     return pmap(one, params_list, n_jobs)
+
+
+G0_SIEMENS = 3.874045864e-5   # e^2 / h
+
+
+def bias_potential(system, bias, axis=0, profile="linear"):
+    """Potential energy per basis state for a bias V between lead 0 (left,
+    at +V/2 ... electron energy -eV/2) and lead 1: a linear drop along ``axis``
+    across the scattering region (non-self-consistent), or 'flat' (no drop)."""
+    P = system.positions()[:, axis]
+    lo, hi = P.min(), P.max()
+    if profile == "flat" or hi - lo < 1e-12:
+        u = np.zeros(len(P))
+    else:
+        u = bias * (0.5 - (P - lo) / (hi - lo))
+    return np.repeat(u, system.ns)
+
+
+def current(system, bias, mu=0.0, kT=0.0259, n_energy=201, params=None, axis=0, profile="linear",
+            from_lead=0, to_lead=1):
+    """Landauer current I(V) = (e/h) int dE T(E, V) [f_L(E) - f_R(E)] in amperes
+    (energies in eV). Lead ``from_lead`` sits at mu + V/2, ``to_lead`` at mu - V/2.
+    The transmission is recomputed at the bias (linear potential drop)."""
+    if abs(bias) < 1e-14:
+        return 0.0
+    window = abs(bias) / 2 + 8 * kT
+    E = np.linspace(mu - window, mu + window, n_energy)
+    pot = bias_potential(system, bias, axis, profile)
+    shifts = [0.0] * len(system.leads)
+    shifts[from_lead], shifts[to_lead] = +bias / 2, -bias / 2
+    T = np.array([SMatrix(system, e, params=params, potential=pot, lead_shifts=shifts).transmission(to_lead, from_lead)
+                  for e in E])
+    fL = 1 / (np.exp(np.clip((E - mu - bias / 2) / kT, -200, 200)) + 1)
+    fR = 1 / (np.exp(np.clip((E - mu + bias / 2) / kT, -200, 200)) + 1)
+    trapz = getattr(np, "trapezoid", None) or np.trapz
+    return float(G0_SIEMENS * trapz(T * (fL - fR), E))
+
+
+def iv_curve(system, biases, mu=0.0, kT=0.0259, n_energy=201, params=None, axis=0, profile="linear",
+             n_jobs=None):
+    """I(V) for many biases (parallel over biases). Returns amperes."""
+    return np.array(pmap(lambda V: current(system, V, mu, kT, n_energy, params, axis, profile),
+                         list(np.atleast_1d(biases)), n_jobs))
