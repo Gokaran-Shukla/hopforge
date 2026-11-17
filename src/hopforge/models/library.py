@@ -439,3 +439,43 @@ def get(name, **params):
     if name not in REGISTRY:
         raise KeyError(f"unknown model {name!r}; see list_models()")
     return REGISTRY[name][0](**params)
+
+
+# ===========================================================================
+# Bogoliubov-de Gennes construction
+# ===========================================================================
+def bdg(model, mu=0.0, delta=0.0):
+    """Bogoliubov-de Gennes doubling of any model: electron block H - mu,
+    hole block -(H - mu)^*, on-site pairing delta between e and h of every
+    orbital (the spin-degenerate s-wave toy model of Kwant's superconductor
+    tutorial; for spinful models use delta * i sigma_y explicitly).
+
+    Orbitals are renamed ``site_e`` / ``site_h`` (orbital kinds are kept)."""
+    from ..model import _Term
+    names, pos = [], []
+    for i, n in enumerate(model.lat.names):
+        site, _, kind = n.partition(":")
+        for tag in ("e", "h"):
+            names.append(f"{site}_{tag}" + (f":{kind}" if kind else ""))
+            pos.append(model.lat.positions[i])
+    lat = Lattice(model.lat.vectors, list(zip(names, pos)), coords="cartesian")
+    m = Model(lat, spinful=model.spinful, name=f"BdG[{model.name}]")
+    ns = model.ns
+    for i in range(model.norb):
+        h = model._onsite[i] - mu * np.eye(ns)
+        m._onsite[2 * i] = h
+        m._onsite[2 * i + 1] = -h.conj()
+        if delta:
+            m.add_hopping(delta * np.eye(ns), 2 * i, 2 * i + 1, None)
+    for t in model._terms:
+        m._terms.append(_Term(2 * t.i, 2 * t.j, t.R.copy(), t.T.copy()))
+        m._terms.append(_Term(2 * t.i + 1, 2 * t.j + 1, t.R.copy(), -t.T.conj()))
+    m.special_points = dict(model.special_points)
+    m.info = dict(model.info)
+    m.info["bdg"] = dict(mu=mu, delta=delta)
+    m._changed()
+    return m
+
+
+REGISTRY["bdg_square"] = (lambda mu=-3.0, delta=0.2: bdg(square(), mu, delta), 2,
+                          "BdG s-wave superconductor on a square lattice")

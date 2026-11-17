@@ -475,6 +475,62 @@ class Model:
 
     hk = hamiltonian
 
+    def hamiltonian_sparse(self, k=None, gauge="atomic"):
+        """Bloch Hamiltonian at a single k as a scipy.sparse CSR matrix
+        (use for large supercells, KPM, sparse eigensolvers)."""
+        import scipy.sparse as sp
+        if k is None:
+            k = np.zeros(self.dim)
+        kc, _ = self._kcart(k)
+        kc = kc[0]
+        c = self._compile()
+        ns, no = self.ns, self.norb
+        rows, cols, vals = [], [], []
+        if len(c["I"]):
+            disp = c["dc"] if gauge == "atomic" else c["Rc"]
+            ph = np.exp(1j * disp @ kc)
+            a, b = np.meshgrid(np.arange(ns), np.arange(ns), indexing="ij")
+            for I, J, p, T in zip(c["I"], c["J"], ph, c["T"]):
+                v = (p * T).ravel()
+                r = (I * ns + a).ravel(); cc = (J * ns + b).ravel()
+                rows += [r, cc]; cols += [cc, r]; vals += [v, v.conj()]
+        for i in range(no):
+            blk = self._onsite[i]
+            a, b = np.meshgrid(np.arange(ns), np.arange(ns), indexing="ij")
+            rows.append((i * ns + a).ravel()); cols.append((i * ns + b).ravel()); vals.append(blk.ravel())
+        N = no * ns
+        if not rows:
+            return sp.csr_matrix((N, N), dtype=complex)
+        H = sp.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                          shape=(N, N)).tocsr()
+        H.sum_duplicates()
+        return H
+
+    def velocity_sparse(self, axis, k=None, gauge="atomic"):
+        """Sparse velocity operator dH/dk_axis (axis 0/1/2 or 'x'/'y'/'z')."""
+        import scipy.sparse as sp
+        ax = ops._axis(axis)
+        if k is None:
+            k = np.zeros(self.dim)
+        kc, _ = self._kcart(k)
+        kc = kc[0]
+        c = self._compile()
+        ns, no = self.ns, self.norb
+        disp = c["dc"] if gauge == "atomic" else c["Rc"]
+        rows, cols, vals = [], [], []
+        a, b = np.meshgrid(np.arange(ns), np.arange(ns), indexing="ij")
+        for I, J, d, T in zip(c["I"], c["J"], disp, c["T"]):
+            M = 1j * d[ax] * np.exp(1j * d @ kc) * T
+            r = (I * ns + a).ravel(); cc = (J * ns + b).ravel()
+            rows += [r, cc]; cols += [cc, r]; vals += [M.ravel(), M.conj().ravel()]
+        N = no * ns
+        if not rows:
+            return sp.csr_matrix((N, N), dtype=complex)
+        V = sp.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                          shape=(N, N)).tocsr()
+        V.sum_duplicates()
+        return V
+
     def velocity(self, k=None, gauge="atomic", cartesian=False):
         """Velocity operators dH/dk_a (a = Cartesian x, y, z, ...),
         shape (D, nk, nb, nb) (or (D, nb, nb) for one k)."""

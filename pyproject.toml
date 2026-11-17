@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hopforge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Forge any tight-binding Hamiltonian: 1D-3D models, bands, topology (Chern, Z2, Wilson loops) and Kubo Hall responses (AHC/SHC/OHC), with tutorials and quizzes."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [{name = "Gokaran Shukla", email = "gokaran.shukla@kaust.edu.sa"}]
-dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5"]
+dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5", "sympy>=1.9"]
 keywords = ["tight-binding", "condensed matter", "topology", "Berry curvature", "Chern number", "Z2", "spin Hall", "orbital Hall"]
 classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Physics", "License :: OSI Approved :: MIT License"]
 
