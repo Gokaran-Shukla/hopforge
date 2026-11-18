@@ -144,3 +144,15 @@ def test_bilayer_keeps_atoms_for_orbital_operators():
     k = np.random.default_rng(3).random((3, 2))
     H = bi.hamiltonian(k)
     assert np.allclose(H, H.conj().transpose(0, 2, 1))
+
+
+def test_macdonald_models():
+    from hopforge import macdonald as MD
+    h = MD.TMDHeterobilayer(theta=2.0, shells=3)
+    H = h.hamiltonian(np.array([[0.1, 0.2]]))[0]
+    assert np.allclose(H, H.conj().T)
+    assert abs(h.bandwidths(1, nk=12)[0] - 11) < 1.0
+    m = MD.TMDHomobilayer(theta=1.2, shells=3)
+    assert np.allclose(np.round(m.chern_numbers(2, nk=18)), [-1, 1])
+    assert abs(abs(hf.chern_number(MD.graphene_qah(), occ=2, nk=60)) - 2) < 1e-6
+    assert "rhombohedral_graphene" in hf.models.REGISTRY

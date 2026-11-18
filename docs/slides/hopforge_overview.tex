@@ -64,7 +64,7 @@
 \subtitle{A universal tight-binding engine: models, topology, response, quantum transport,\\ strong correlations and moiré physics in one Python package}
 \author{Gokaran Shukla}
 \institute{King Abdullah University of Science and Technology (KAUST)\\\texttt{github.com/Gokaran-Shukla/hopforge}}
-\date{Version 0.6.0 \textbullet{} November 2026}
+\date{Version 0.7.0 \textbullet{} November 2026}
 
 \begin{document}
 
@@ -82,14 +82,14 @@
     {\normalsize\color{white!75}models \textbullet{} topology \textbullet{} linear response \textbullet{} quantum transport\\
      strong correlations \textbullet{} quantum phases \textbullet{} moiré \& orbitronics}\\[22pt]
     {\normalsize\bfseries Gokaran Shukla}\\[2pt]
-    {\small\color{white!75}KAUST \textbullet{} v0.6.0 \textbullet{} November 2026}\\[2pt]{\small\color{accent}github.com/Gokaran-Shukla/hopforge}};
+    {\small\color{white!75}KAUST \textbullet{} v0.7.0 \textbullet{} November 2026}\\[2pt]{\small\color{accent}github.com/Gokaran-Shukla/hopforge}};
 \end{tikzpicture}
 \end{frame}
 }
 
 \begin{frame}{hopforge at a glance}
 \centering
-\stat{33}{library models}\hfill\stat{59/59}{published benchmarks}\hfill\stat{110}{automated tests}\hfill\stat{20}{executed tutorials}\hfill\stat{400}{quiz questions}
+\stat{36}{library models}\hfill\stat{69/69}{published benchmarks}\hfill\stat{121}{automated tests}\hfill\stat{21}{executed tutorials}\hfill\stat{420}{quiz questions}
 \vspace{10pt}
 \begin{columns}[T]
 \begin{column}{0.5\textwidth}
@@ -110,13 +110,14 @@
 \end{frame}
 
 \begin{frame}{Outline}
-\vspace{8pt}
+\vspace{6pt}
 \begin{tabular}{@{}r@{\hspace{8pt}}p{5.6cm}r@{\hspace{8pt}}p{5.6cm}@{}}
-{\color{accent}\bfseries 01} & Building Hamiltonians & {\color{accent}\bfseries 06} & Strong correlations and quantum phases\\[5pt]
-{\color{accent}\bfseries 02} & Topology & {\color{accent}\bfseries 07} & Validation\\[5pt]
-{\color{accent}\bfseries 03} & Linear response & {\color{accent}\bfseries 08} & Performance\\[5pt]
-{\color{accent}\bfseries 04} & Quantum transport and large-scale methods & {\color{accent}\bfseries 09} & Learning: tutorials and quizzes\\[5pt]
-{\color{accent}\bfseries 05} & Orbitronics, torques and moiré bilayers & {\color{accent}\bfseries 10} & Status and outlook\\[5pt]
+{\color{accent}\bfseries 01} & Building Hamiltonians & {\color{accent}\bfseries 07} & Strong correlations and quantum phases\\[5pt]
+{\color{accent}\bfseries 02} & Topology & {\color{accent}\bfseries 08} & Validation\\[5pt]
+{\color{accent}\bfseries 03} & Linear response & {\color{accent}\bfseries 09} & Performance\\[5pt]
+{\color{accent}\bfseries 04} & Quantum transport and large-scale methods & {\color{accent}\bfseries 10} & Learning: tutorials and quizzes\\[5pt]
+{\color{accent}\bfseries 05} & Orbitronics, torques and moiré bilayers & {\color{accent}\bfseries 11} & Status and outlook\\[5pt]
+{\color{accent}\bfseries 06} & Allan MacDonald's models & &\\[5pt]
 \end{tabular}
 \end{frame}
 
@@ -155,7 +156,7 @@ $\En{E},\En{\mu},\En{\Gamma}$ & energies, broadening\\
 \centering
 \begin{tikzpicture}
 \node[box=navy!80](inp1){Lattice + orbitals};
-\node[box=navy!80,below=0.25 of inp1](inp2){Published model\\library (33)};
+\node[box=navy!80,below=0.25 of inp1](inp2){Published model\\library (36)};
 \node[box=navy!80,below=0.25 of inp2](inp3){Wannier90 / POSCAR};
 \node[box=navy!80,below=0.25 of inp3](inp4){$k\!\cdot\!p$ $\to$ discretize};
 \node[box=accent,minimum height=3.6cm,minimum width=2.4cm,right=0.7 of $(inp2.east)!0.5!(inp3.east)$](M){\large Model\\[4pt]\scriptsize $\Hm{H(\mathbf k)}$, $\Ve{v(\mathbf k)}$\\sparse $\Hm{H}$\\operators\\supercell, ribbon,\\flake, slab};
@@ -201,9 +202,9 @@ hf.plot_lattice(m, shells=3)
 \end{columns}
 \end{frame}
 
-\begin{frame}{The model library: 33 published Hamiltonians}
+\begin{frame}{The model library: 36 published Hamiltonians}
 \scriptsize
-\renewcommand{\arraystretch}{1.25}
+\renewcommand{\arraystretch}{1.12}
 \begin{tabularx}{\textwidth}{@{}>{\bfseries\color{accent}}l X@{}}
 \toprule
 1D & chain, SSH, Rice-Mele, Kitaev chain, Creutz ladder\\
@@ -213,6 +214,7 @@ Spintronics & Rashba square, $d$-wave altermagnet, $p$-orbital square (orbital H
 3D crystals & cubic, bcc, fcc, diamond, Vogl $sp^3s^*$ silicon (Slater-Koster engine)\\
 Bernevig group & BBH quadrupole insulator, chiral $p+ip$ superconductor, type-II Weyl, flat Chern band, BHZ\\
 Vishwanath / moiré & Bistritzer-MacDonald and chiral TBG, real-space twisted bilayers (Moon-Koshino)\\
+MacDonald group & TMD moiré Hubbard and topological MoTe$_2$ bands, ABC $N$-layer graphene, graphene QAH, Rashba 2DEG spin Hall\\
 Sachdev / correlated & SYK, transverse-field Ising, Hubbard, Kanamori, Bose-Hubbard, Kitaev honeycomb\\
 Builders & \texttt{bdg()}, \texttt{make\_spinful()}, \texttt{discretize()}, \texttt{bilayer()}, \texttt{register\_model} for community models\\
 \bottomrule
@@ -445,6 +447,49 @@ $\Hp{T}=\sum_j \Hp{T_j}e^{-i\mathbf q_j\cdot\mathbf r}$, $\alpha=\Hp{w_1}/v k_\t
 \end{frame}
 
 % =====================================================================
+\section{Allan MacDonald's models}
+
+\begin{frame}{MacDonald group I: TMD moiré bilayers (\texttt{hf.macdonald})}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\centering\fig[width=0.9\linewidth]{md_hetero.png}
+\figcap{WSe$_2$/MoSe$_2$, 2°: top band 10.85 meV (paper $\approx$11)}
+\vspace{2pt}
+\fig[width=0.82\linewidth]{md_mote2.png}
+\figcap{twisted MoTe$_2$: $C$ and gaps vs $\theta$ ($\theta_1^*=1.74^\circ$)}
+\end{column}
+\begin{column}{0.48\textwidth}
+\scriptsize
+\scriptsize
+\textbf{Heterobilayer} (Wu, Lovorn, Tutuc \& MacDonald, PRL 2018)
+\[\Hm{H}=-\tfrac{\hbar^2k^2}{2m^*}+\textstyle\sum_j \Hp{V(\mathbf b_j)}e^{i\mathbf b_j\cdot\mathbf r}\]
+\vspace{-10pt}
+\begin{itemize}\scriptsize
+\item fit $\to$ triangular Hubbard $\Hp{t_1},\Hp{t_2},\Hp{t_3}$, harmonic $\Hp{U_0}$; \texttt{to\_model()}
+\end{itemize}
+\vspace{2pt}
+\textbf{Homobilayer} (Wu et al., PRL 2019)
+\[\Hm{H_\uparrow}=\begin{pmatrix}-\tfrac{\hbar^2(\mathbf k-\kappa_+)^2}{2m^*}+\Delta_b & \Hp{\Delta_T}\\ \Hp{\Delta_T^\dagger} & -\tfrac{\hbar^2(\mathbf k-\kappa_-)^2}{2m^*}+\Delta_t\end{pmatrix}\]
+\vspace{-10pt}
+\begin{itemize}\scriptsize
+\item Kubo Chern numbers in the plane-wave basis
+\item $C=(-1,+1)$ at 1.2°, $(-1,-1,+2)$ at 2°: QSH moiré bands
+\end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{MacDonald group II: graphene multilayers, spin Hall, QAH}
+\centering
+\begin{minipage}[t]{0.4\textwidth}\centering\fig[width=\linewidth]{md_abc.png}\figcap{ABC graphene: $E\propto(\Ve{v}k)^N/\Hp{t_\perp}^{N-1}$ (Min \& MacDonald 2008); valley Chern $\pm N/2$}\end{minipage}\hfill
+\begin{minipage}[t]{0.28\textwidth}\centering\fig[width=\linewidth]{md_sinova.png}\figcap{universal spin Hall $e/8\pi$ (Sinova et al.\ 2004): 0.995}\end{minipage}\hfill
+\begin{minipage}[t]{0.28\textwidth}\centering\fig[width=\linewidth]{md_qah.png}\figcap{graphene + Rashba + exchange: QAH with $C=2$ (Tse, Qiao, Yao, MacDonald \& Niu 2011)}\end{minipage}
+
+\vspace{8pt}
+\footnotesize No public MacDonald-group tight-binding package exists; hopforge implements the published Hamiltonians and checks 10 of their results in CI. Tutorial 21 walks through all of them.
+\end{frame}
+
+% =====================================================================
 \section{Strong correlations and quantum phases}
 
 \begin{frame}{Mean-field and driven systems}
@@ -512,7 +557,7 @@ Kitaev honeycomb & bond-dependent Pauli model, cluster ED & Ann.\ Phys.\ 321, 2 
 % =====================================================================
 \section{Validation}
 
-\begin{frame}{59 benchmarks against published results, run in CI}
+\begin{frame}{69 benchmarks against published results, run in CI}
 \begin{columns}[T]
 \begin{column}{0.56\textwidth}
 \scriptsize
@@ -530,6 +575,8 @@ Diffusive Fano factor & 1/3 & 0.359\\
 $4\times4$ Heisenberg $E_0$ & $-11.228483$ & $-11.228483$\\
 Bose-Hubbard tip $U/zt$ & 5.8284 & 5.8284\\
 Chiral TBG magic $\alpha$ & 0.586 & 0.5857\\
+MoTe$_2$ $C$ at 1.2° (Wu 2019) & $(-1,1)$ & $(-1,1)$\\
+Spin Hall / $(e/8\pi)$ (Sinova) & 1 & 0.995\\
 \bottomrule
 \end{tabular}
 \end{column}
@@ -541,6 +588,7 @@ Chiral TBG magic $\alpha$ & 0.586 & 0.5857\\
 \item \textbf{Mean field / Floquet}: 3
 \item \textbf{Correlated / phases}: 11
 \item \textbf{Bernevig, moiré, torques}: 11
+\item \textbf{MacDonald group}: 10
 \end{itemize}
 \vspace{6pt}
 \begin{block}{Reproduce}
@@ -587,7 +635,7 @@ phases.hubbard_phase_diagram(m, Us, fillings,
 % =====================================================================
 \section{Learning: tutorials and quizzes}
 
-\begin{frame}{20 executed tutorials, each with a 20-question quiz}
+\begin{frame}{21 executed tutorials, each with a 20-question quiz}
 \scriptsize
 \renewcommand{\arraystretch}{1.12}
 \begin{columns}[T]
@@ -617,6 +665,7 @@ phases.hubbard_phase_diagram(m, Us, fillings,
 18 & \textbf{Step by step:} orbitronics, torques, moiré\\
 19 & \textbf{Step by step:} interacting phase diagrams\\
 20 & Reproducing research models\\
+21 & Allan MacDonald's models\\
 \end{tabular}
 \end{column}
 \end{columns}

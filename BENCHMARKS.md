@@ -1,6 +1,6 @@
 # hopforge benchmarks against published results
 
-hopforge 0.6.0: **59/59 pass**. Regenerate with `python -m hopforge.benchmarks -j -1`.
+hopforge 0.7.0: **69/69 pass**. Regenerate with `python -m hopforge.benchmarks -j -1`.
 
 | # | Benchmark | Quantity | Published | hopforge | Status | Reference |
 |---|---|---|---|---|---|---|
@@ -63,3 +63,13 @@ hopforge 0.6.0: **59/59 pass**. Regenerate with `python -m hopforge.benchmarks -
 | 57 | Real-space TBG vs continuum | Dirac point preserved; v*/v within 6% of BM (w = 0.11 eV) at 7.3 deg | 0.9338 | (0.9218, 'gap(K)=4.7e-05') | pass | Moon & Koshino, PRB 85, 195458 (2012); Trambly de Laissardiere et al., Nano Lett. 10, 804 (2010) |
 | 58 | Rashba spin-orbit torque symmetry | extrinsic (Fermi surface) torque field-like, intrinsic (Fermi sea) damping-like | FS: FL >> DL; sea: DL >> FL | (0.5326, 0.0114, 0.0, 0.0116) | pass | Kurebayashi et al., Nat. Nanotech. 9, 211 (2014); Freimuth, Bluegel & Mokrousov, PRB 90, 174423 (2014) |
 | 59 | Kubo-Streda -> Boltzmann limit | Fermi-surface term = Boltzmann with tau = 1/(2 Gamma) (within 8%) | 1.0 | 0.9961 | pass | Bastin et al., J. Phys. Chem. Solids 32, 1811 (1971); Streda (1982) |
+| 60 | TMD heterobilayer flat band (WSe2/MoSe2) | top moire valence bandwidth at 2.0 deg ~ 11 meV | 11.0 | 10.85 | pass | Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018) |
+| 61 | TMD heterobilayer WSe2/MoS2 at 0 deg | moire period ~ 8.5 nm and bandwidth ~ 20 meV | (8.5, 20.0) | (8.51, 20.33) | pass | Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018) |
+| 62 | TMD moire harmonic potential | Delta ~ -beta V (r/aM)^2/2 with beta = 16 pi^2 cos(psi + 120 deg) | 141.932 | 141.931 | pass | Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018) |
+| 63 | Twisted MoTe2 topological bands (1.2 deg) | +K valley Chern numbers of the top two bands (-1, +1) | [-1, 1] | [-1.0, 1.0] | pass | Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019) |
+| 64 | Twisted MoTe2 band inversion (2.0 deg) | Chern numbers of the top three bands (-1, -1, +2) | [-1, -1, 2] | [-1.0, -0.998, 1.998] | pass | Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019) |
+| 65 | Twisted MoTe2 critical angles | gap 2-3 closes at theta1* ~ 1.74 deg; gap 1-2 survives to theta2* ~ 3.1 deg | (1.74, 3.1) | (1.75, 3.202) | pass | Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019) |
+| 66 | Universal intrinsic spin Hall conductivity | Rashba 2DEG, both bands occupied: sigma_sH = e/8pi | 1.0 | 0.9946 | pass | Sinova, Culcer, Niu, Sinitsyn, Jungwirth & MacDonald, PRL 92, 126603 (2004) |
+| 67 | Graphene QAH from Rashba + exchange | Chern number C = 2 in the bulk gap | 2 | 2.0 | pass | Qiao et al., PRB 82, 161414(R) (2010); Tse, Qiao, Yao, MacDonald & Niu, PRB 83, 155447 (2011) |
+| 68 | Chiral decomposition of ABC graphene | E = (v k)^N / t_perp^(N-1) near K for N = 1..4 | [1, 1, 1, 1] | [0.9999, 0.9997, 0.9996, 0.9994] | pass | Min & MacDonald, PRB 77, 155416 (2008) |
+| 69 | Valley Chern number of gapped ABC graphene | +-N/2 per valley (N = 2, 3) | [1, -1, 1.5, -1.5] | [1.0, -1.0, 1.5, -1.5] | pass | Zhang, Sahu, Min & MacDonald, PRB 82, 035409 (2010); Zhang et al., PRL 106, 156801 (2011) |

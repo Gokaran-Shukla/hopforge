@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hopforge"
-version = "0.6.0"
+version = "0.7.0"
 description = "Forge any tight-binding Hamiltonian: 1D-3D models, bands, topology (Chern, Z2, Wilson loops) and Kubo Hall responses (AHC/SHC/OHC), with tutorials and quizzes."
 readme = "README.md"
 requires-python = ">=3.9"

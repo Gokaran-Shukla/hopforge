@@ -784,6 +784,112 @@ def _ks_limit():
 
 
 # =============================================================================
+# MacDonald group models (hopforge.macdonald)
+# =============================================================================
+@benchmark("TMD heterobilayer flat band (WSe2/MoSe2)", "top moire valence bandwidth at 2.0 deg ~ 11 meV",
+           "Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018)")
+def _md_hetero():
+    import hopforge as hf
+    W = hf.macdonald.TMDHeterobilayer(theta=2.0).bandwidths(1, nk=24)[0]
+    return 11.0, round(W, 2), abs(W - 11.0) < 0.6
+
+
+@benchmark("TMD heterobilayer WSe2/MoS2 at 0 deg", "moire period ~ 8.5 nm and bandwidth ~ 20 meV",
+           "Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018)")
+def _md_hetero2():
+    import hopforge as hf
+    h = hf.macdonald.TMDHeterobilayer.preset("WSe2/MoS2", theta=0.0)
+    W = h.bandwidths(1, nk=24)[0]
+    return (8.5, 20.0), (round(h.aM, 2), round(W, 2)), abs(h.aM - 8.5) < 0.1 and abs(W - 20) < 1.0
+
+
+@benchmark("TMD moire harmonic potential", "Delta ~ -beta V (r/aM)^2/2 with beta = 16 pi^2 cos(psi + 120 deg)",
+           "Wu, Lovorn, Tutuc & MacDonald, PRL 121, 026402 (2018)")
+def _md_beta():
+    import hopforge as hf
+    h = hf.macdonald.TMDHeterobilayer(theta=2.0)
+    hm = h.harmonic()
+    beta = hm["hbar_omega"] ** 2 * h.mass / (2 * hf.macdonald.HB2M) * h.aM ** 2 / h.V
+    ref = 16 * np.pi ** 2 * np.cos(np.radians(-94 + 120))
+    return round(ref, 3), round(beta, 3), abs(beta / ref - 1) < 1e-4
+
+
+@benchmark("Twisted MoTe2 topological bands (1.2 deg)", "+K valley Chern numbers of the top two bands (-1, +1)",
+           "Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019)")
+def _md_homo1():
+    import hopforge as hf
+    C = hf.macdonald.TMDHomobilayer(theta=1.2).chern_numbers(2, nk=24)
+    return [-1, 1], [round(c, 3) for c in C], _close(C, [-1, 1], 0.02)
+
+
+@benchmark("Twisted MoTe2 band inversion (2.0 deg)", "Chern numbers of the top three bands (-1, -1, +2)",
+           "Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019)")
+def _md_homo2():
+    import hopforge as hf
+    C = hf.macdonald.TMDHomobilayer(theta=2.0).chern_numbers(3, nk=24)
+    return [-1, -1, 2], [round(c, 3) for c in C], _close(C, [-1, -1, 2], 0.03)
+
+
+@benchmark("Twisted MoTe2 critical angles", "gap 2-3 closes at theta1* ~ 1.74 deg; gap 1-2 survives to theta2* ~ 3.1 deg",
+           "Wu, Lovorn, Tutuc, Martin & MacDonald, PRL 122, 086402 (2019)")
+def _md_angles():
+    import hopforge as hf
+    from scipy.optimize import brentq
+    def gap(th, i):
+        m = hf.macdonald.TMDHomobilayer(theta=th)
+        k = np.vstack([m.kmesh(16), np.zeros((1, 2)), m.points["kappa+"], m.points["kappa-"]])
+        E = m.energies(k, i + 2)
+        return E[:, i].min() - E[:, i + 1].max()
+    ths = np.linspace(1.6, 1.9, 13)
+    g = [gap(t, 1) for t in ths]
+    t1 = ths[int(np.argmin(g))]
+    t2 = brentq(lambda t: gap(t, 0), 2.8, 3.4, xtol=1e-3)
+    return (1.74, 3.1), (round(t1, 3), round(t2, 3)), abs(t1 - 1.74) < 0.03 and abs(t2 - 3.1) < 0.15
+
+
+@benchmark("Universal intrinsic spin Hall conductivity", "Rashba 2DEG, both bands occupied: sigma_sH = e/8pi",
+           "Sinova, Culcer, Niu, Sinitsyn, Jungwirth & MacDonald, PRL 92, 126603 (2004)")
+def _md_sinova():
+    import hopforge as hf
+    r = hf.macdonald.sinova_spin_hall(mu=-3.6, alpha=0.1, nk=500)
+    return 1.0, round(r, 4), abs(r - 1) < 0.02
+
+
+@benchmark("Graphene QAH from Rashba + exchange", "Chern number C = 2 in the bulk gap",
+           "Qiao et al., PRB 82, 161414(R) (2010); Tse, Qiao, Yao, MacDonald & Niu, PRB 83, 155447 (2011)")
+def _md_qah():
+    import hopforge as hf
+    C = hf.chern_number(hf.macdonald.graphene_qah(lr=0.05, M=0.1), occ=2, nk=120)
+    return 2, round(C, 4), abs(abs(C) - 2) < 1e-3
+
+
+@benchmark("Chiral decomposition of ABC graphene", "E = (v k)^N / t_perp^(N-1) near K for N = 1..4",
+           "Min & MacDonald, PRB 77, 155416 (2008)")
+def _md_abc():
+    import hopforge as hf
+    ratios = []
+    for N in (1, 2, 3, 4):
+        m = hf.macdonald.rhombohedral_graphene(N, tperp=0.3)
+        B = m.lat.reciprocal[:2, :2]
+        kf = np.linalg.solve(B.T, np.array([2 / 3, 1 / 3]) @ B + np.array([1e-3, 0]))
+        E = np.linalg.eigvalsh(m.hamiltonian(kf[None])[0])[N]
+        ratios.append(round(E / ((np.sqrt(3) / 2 * 1e-3) ** N / 0.3 ** (N - 1)), 4))
+    return [1, 1, 1, 1], ratios, _close(ratios, [1, 1, 1, 1], 2e-3)
+
+
+@benchmark("Valley Chern number of gapped ABC graphene", "+-N/2 per valley (N = 2, 3)",
+           "Zhang, Sahu, Min & MacDonald, PRB 82, 035409 (2010); Zhang et al., PRL 106, 156801 (2011)")
+def _md_valley():
+    import hopforge as hf
+    v = []
+    for N in (2, 3):
+        m = hf.macdonald.rhombohedral_graphene(N, tperp=0.3, bias=0.02)
+        v += [round(hf.macdonald.valley_chern(m, N, [2 / 3, 1 / 3], 0.3, 301), 3),
+              round(hf.macdonald.valley_chern(m, N, [1 / 3, 2 / 3], 0.3, 301), 3)]
+    return [1, -1, 1.5, -1.5], v, _close(v, [1, -1, 1.5, -1.5], 0.02)
+
+
+# =============================================================================
 # helpers
 # =============================================================================
 def silicon_vogl(a=5.431):

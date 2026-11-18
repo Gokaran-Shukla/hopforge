@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+* `hf.macdonald`: models of A. H. MacDonald's group. TMD heterobilayer moiré Hubbard model (Wu et al. PRL 2018), twisted TMD homobilayer topological bands (Wu et al. PRL 2019), generic plane-wave continuum engine with Kubo Chern numbers and tight-binding export, ABC N-layer graphene, graphene QAH, Rashba 2DEG universal spin Hall.
+* 10 new published-result benchmarks (69 total); tutorial 21 and quiz 21.
+* Beamer overview slides in `docs/slides/`.
+
 ## 0.6.0
 * Tutorials 17-20 (step-by-step model building, orbitronics/moiré bilayers, interacting phase diagrams, research models) with quizzes 17-20.
 * Fix: `moire.bilayer` now keeps one label per atom, so orbital angular momentum operators work on bilayers.

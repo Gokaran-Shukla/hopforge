@@ -19,6 +19,7 @@ _MODULES = {
     "14": "q14_boltzmann_edelstein", "15": "q15_nonlinear_orbital_optical", "16": "q16_meanfield_floquet",
     "17": "q17_build_hamiltonian", "18": "q18_orbitronics_bilayers", "19": "q19_interacting_phases",
     "20": "q20_research_models",
+    "21": "q21_macdonald_models",
 }
 LETTERS = "abcdefgh"
 
