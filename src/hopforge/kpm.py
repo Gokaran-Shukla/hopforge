@@ -75,23 +75,30 @@ def _random_vectors(N, R, rng):
 
 def moments(H, num_moments=200, vectors=None, num_vectors=10, operator=None, seed=0,
             bounds=None):
-    """Chebyshev moments mu_n = <v| O T_n(H~) |v> (averaged over vectors)."""
+    """Chebyshev moments mu_n = <v| O T_n(H~) |v> (averaged over vectors).
+    The recursion runs on the active back-end (GPU with hf.backend.use('cupy'))."""
+    from . import backend as bk
     S = _Scaled(H, bounds)
     rng = np.random.default_rng(seed)
     V = _random_vectors(S.N, num_vectors, rng) if vectors is None else np.asarray(vectors, complex)
     if V.ndim == 1:
         V = V[:, None]
-    O = (lambda x: x) if operator is None else (lambda x: operator @ x)
-    left = O(V) if operator is not None else V
-    mu = np.zeros((num_moments, V.shape[1]), complex)
-    a0, a1 = V, S(V)
-    mu[0] = np.einsum("ir,ir->r", left.conj(), a0)
+    x = bk.xp()
+    Hd = bk.sparse_to_device(S.H)
+    Od = None if operator is None else bk.sparse_to_device(operator)
+    a_, b_ = S.a, S.b
+    step = lambda v: (Hd @ v - b_ * v) / a_
+    Vd = x.asarray(V)
+    left = Vd if Od is None else Od @ Vd
+    mu = x.zeros((num_moments, V.shape[1]), dtype=complex)
+    a0, a1 = Vd, step(Vd)
+    mu[0] = x.einsum("ir,ir->r", left.conj(), a0)
     if num_moments > 1:
-        mu[1] = np.einsum("ir,ir->r", left.conj(), a1)
+        mu[1] = x.einsum("ir,ir->r", left.conj(), a1)
     for n in range(2, num_moments):
-        a0, a1 = a1, 2 * S(a1) - a0
-        mu[n] = np.einsum("ir,ir->r", left.conj(), a1)
-    return S, mu
+        a0, a1 = a1, 2 * step(a1) - a0
+        mu[n] = x.einsum("ir,ir->r", left.conj(), a1)
+    return S, bk.to_host(mu)
 
 
 def _reconstruct(S, mu, energies, kernel):

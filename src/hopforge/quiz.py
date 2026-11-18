@@ -20,6 +20,7 @@ _MODULES = {
     "17": "q17_build_hamiltonian", "18": "q18_orbitronics_bilayers", "19": "q19_interacting_phases",
     "20": "q20_research_models",
     "21": "q21_macdonald_models",
+    "22": "q22_dmrg", "23": "q23_negf", "24": "q24_gpu_registry",
 }
 LETTERS = "abcdefgh"
 

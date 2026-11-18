@@ -566,10 +566,8 @@ class Model:
 
     def eig(self, k=None, vectors=True, gauge="atomic"):
         """Eigenvalues (and eigenvectors as columns) at k-points."""
-        H = self.hamiltonian(k, gauge=gauge)
-        if vectors:
-            return np.linalg.eigh(H)
-        return np.linalg.eigvalsh(H)
+        from .backend import eigh
+        return eigh(self.hamiltonian(k, gauge=gauge), vectors)
 
     def energies(self, k=None):
         return self.eig(k, vectors=False)

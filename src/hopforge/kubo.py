@@ -29,25 +29,29 @@ def _anticomm(O, v):
 
 
 def _band_resolved(model, k, a, b, O=None, eta=0.0, chunk=2000, degeneracy_tol=1e-8):
-    """Energies (nk, nb) and band-resolved Omega^O_{n,ab} (nk, nb)."""
+    """Energies (nk, nb) and band-resolved Omega^O_{n,ab} (nk, nb). Runs on the
+    active back-end (hf.backend.use('cupy') puts the kernel on the GPU)."""
+    from . import backend as bk
+    x = bk.xp()
     Es, Oms = [], []
+    Od = None if O is None else x.asarray(O)
+    ein = (lambda *a: np.einsum(*a, optimize=True)) if x is np else x.einsum
     for s in range(0, len(k), chunk):
         kk = k[s:s + chunk]
-        E, V = model.eig(kk)
+        E, V = bk.eigh_device(model.hamiltonian(kk))
         vel = model.velocity(kk)
-        va, vb = vel[a], vel[b]
-        Ja = va if O is None else _anticomm(O, va)
-        A = np.einsum("kin,kij,kjm->knm", V.conj(), Ja, V, optimize=True)
-        B = np.einsum("kin,kij,kjm->knm", V.conj(), vb, V, optimize=True)
+        va, vb = x.asarray(vel[a]), x.asarray(vel[b])
+        Ja = va if Od is None else 0.5 * (Od @ va + va @ Od)
+        A = ein("kin,kij,kjm->knm", V.conj(), Ja, V)
+        B = ein("kin,kij,kjm->knm", V.conj(), vb, V)
         dE = E[:, :, None] - E[:, None, :]
         denom = dE ** 2 + eta ** 2
-        mask = np.abs(dE) > degeneracy_tol if eta == 0 else np.ones_like(dE, bool)
         nb = E.shape[1]
-        mask &= ~np.eye(nb, dtype=bool)[None]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            term = np.where(mask, (A * B.transpose(0, 2, 1)) / np.where(mask, denom, 1), 0)
-        Oms.append(-2 * term.sum(2).imag)
-        Es.append(E)
+        offd = ~x.eye(nb, dtype=bool)[None]
+        mask = (x.abs(dE) > degeneracy_tol) & offd if eta == 0 else x.broadcast_to(offd, dE.shape)
+        term = x.where(mask, (A * B.transpose(0, 2, 1)) / x.where(mask, denom, 1), 0)
+        Oms.append(bk.to_host(-2 * term.sum(2).imag))
+        Es.append(bk.to_host(E))
     return np.concatenate(Es), np.concatenate(Oms)
 
 

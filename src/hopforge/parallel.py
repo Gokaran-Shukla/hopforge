@@ -42,6 +42,12 @@ def set_default_jobs(n: int):
 
 
 def resolve_jobs(n_jobs) -> int:
+    try:
+        from .backend import is_gpu
+        if is_gpu():            # CUDA contexts cannot be forked; the GPU replaces the node
+            return 1
+    except ImportError:
+        pass
     n = DEFAULT_JOBS if n_jobs is None else int(n_jobs)
     if n < 0:
         n = available_cores()

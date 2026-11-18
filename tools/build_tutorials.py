@@ -1453,6 +1453,266 @@ plt.plot(r.mu, r.sigma, "o-"); plt.xlabel("μ (t)"); plt.ylabel("σ$_{xy}$ (e²/
 ] + quiz_cells(21, "MacDonald-group models")
 
 
+NOTEBOOKS["22_dmrg_tensor_networks"] = [
+    ("md", r"""# 22 · DMRG and matrix-product states: interacting chains with hundreds of sites
+
+Exact diagonalisation (tutorial 19) stops at about 20–30 sites. `hf.dmrg` represents the ground state as a
+**matrix-product state** (MPS) and optimises it site by site (White's density-matrix renormalisation group).
+The cost grows only linearly with length for a fixed bond dimension $\chi$, so 1D chains with
+**hundreds of sites** are routine. The truncation error tells you how converged the result is.
+
+| Function | What it does |
+|---|---|
+| `build_mpo(L, sites, terms)` | any Hamiltonian $\sum c\,O_1O_2\cdots$ → compressed MPO (Jordan-Wigner strings automatic) |
+| `heisenberg`, `tfim`, `aklt`, `hubbard`, `spinless_fermions` | ready-made MPOs |
+| `from_model(model, L, U, V)` | any 1D hopforge `Model` + interactions |
+| `dmrg(H, chi=[...], sweeps)` | two-site DMRG with a bond-dimension schedule |
+| `excited_states(H, n)` | low-lying states by orthogonality penalties |
+| `MPS.expect / correlation / entanglement` | measurements |"""),
+    ("code", SETUP + "\nD = hf.dmrg"),
+    ("md", "## 1 · Any Hamiltonian as an MPO\nTerms are lists of `(coefficient, [(operator, site), ...])`. Below: a $J_1$-$J_2$ chain in a field. The compressed MPO bond dimension is printed, and DMRG is checked against exact diagonalisation of the same MPO."),
+    ("code", """L = 10
+terms = []
+for i in range(L - 1):
+    terms += [(0.5, [("Sp", i), ("Sm", i + 1)]), (0.5, [("Sm", i), ("Sp", i + 1)]), (1.0, [("Sz", i), ("Sz", i + 1)])]
+for i in range(L - 2):
+    terms += [(0.3 * 0.5, [("Sp", i), ("Sm", i + 2)]), (0.3 * 0.5, [("Sm", i), ("Sp", i + 2)]), (0.3, [("Sz", i), ("Sz", i + 2)])]
+terms += [(-0.1, [("Sz", i)]) for i in range(L)]
+H = D.build_mpo(L, D.SPIN, terms)
+print("MPO bond dimensions:", H.bond_dims)
+e_ed = np.linalg.eigvalsh(H.to_dense())[0]
+r = D.dmrg(H, chi=[16, 32], sweeps=4)
+print(f"ED  {e_ed:.12f}\\nDMRG {r.energy:.12f}")"""),
+    ("md", "## 2 · The Heisenberg chain with 100 sites\nThe converged open-chain energy is $E_0=-44.127739\\ldots$. The bond dimension grows sweep by sweep, and the discarded weight measures the error."),
+    ("code", """r = D.dmrg(D.heisenberg(100), chi=[16, 32, 64, 96, 128], sweeps=5, verbose=True)
+fig, ax = plt.subplots(1, 3, figsize=(13, 3.6))
+ax[0].semilogy(range(1, len(r.energies) + 1), np.array(r.energies) + 44.12773986, "o-")
+ax[0].set_xlabel("sweep"); ax[0].set_ylabel("E - E_ref"); ax[0].set_title("energy convergence")
+ax[1].semilogy(range(1, len(r.truncation) + 1), r.truncation, "s-", c="tab:red")
+ax[1].set_xlabel("sweep"); ax[1].set_ylabel("discarded weight"); ax[1].set_title("truncation error")
+S = r.entropy; l = np.arange(1, 100)
+c = D.calabrese_cardy_obc(S, 100)
+ax[2].plot(l, S, ".", ms=3, label="DMRG")
+x = np.log(200 / np.pi * np.sin(np.pi * l / 100))
+ax[2].plot(l, c / 6 * x + np.mean(S[30:70] - c / 6 * x[30:70]), "k-", label=f"CFT, c = {c:.3f}")
+ax[2].set_xlabel("bond l"); ax[2].set_ylabel("S(l)"); ax[2].legend(); ax[2].set_title("entanglement entropy")
+plt.tight_layout()"""),
+    ("code", """psi = r.mps
+Sz = D.SPIN["Sz"]
+i0 = 30
+d = np.arange(1, 40)
+C = np.array([psi.correlation(Sz, Sz, i0, i0 + x).real for x in d])
+plt.loglog(d, np.abs(C), "o", label="|<Sz_i Sz_{i+r}>|")
+plt.loglog(d, 0.15 / d, "k--", label="~ 1/r (log corrections)")
+plt.xlabel("r"); plt.ylabel("|C(r)|"); plt.legend(); plt.title("critical antiferromagnetic correlations")"""),
+    ("md", "## 3 · The quantum Ising transition with DMRG\nAt the critical point $h=J$ the half-chain entanglement of an open chain grows as $S(L/2)=\\frac{c}{6}\\ln L+\\text{const}$, and the slope gives the central charge $c=1/2$. DMRG energies agree with the exact free-fermion solution at every field. (In the ordered phase a finite chain's ground state is a cat state, nearly degenerate with the symmetry-broken states, so check entanglement there with care.)"),
+    ("code", """Ls = np.array([16, 24, 32, 48, 64, 96])
+Sc = np.array([D.dmrg(D.tfim(L, 1.0, 1.0), chi=[16, 32, 48], sweeps=3).entropy[L // 2 - 1] for L in Ls])
+slope, icpt = np.polyfit(np.log(Ls), Sc, 1)
+hs = np.linspace(0.5, 1.5, 11)
+fig, ax = plt.subplots(1, 2, figsize=(10, 3.6))
+ax[0].plot(np.log(Ls), Sc, "o", ms=8, label="DMRG, h = J")
+ax[0].plot(np.log(Ls), slope * np.log(Ls) + icpt, "k-", label=f"slope c/6 → c = {6 * slope:.3f}")
+ax[0].set_xlabel("ln L"); ax[0].set_ylabel("S(L/2)"); ax[0].legend(); ax[0].set_title("critical entanglement growth")
+for L in (16, 32, 64):
+    err = [abs(D.dmrg(D.tfim(L, 1.0, h), chi=[16, 32, 48], sweeps=4).energy - D.tfim_exact_obc(L, 1.0, h)) for h in hs]
+    ax[1].semilogy(hs, np.maximum(err, 1e-15), "o-", label=f"L = {L}")
+ax[1].axvline(1, c="k", ls=":"); ax[1].set_xlabel("h / J"); ax[1].set_ylabel("|E_DMRG - E_exact|"); ax[1].legend()
+ax[1].set_title("accuracy vs the exact solution")
+plt.tight_layout()"""),
+    ("md", "## 4 · Haldane phase: AKLT and the spin-1 Heisenberg chain\nThe AKLT state is an exact MPS with $\\chi=2$: energy $-2/3$ per bond and string order $-4/9$. The spin-1 Heisenberg chain is in the same (Haldane) phase, with string order ≈ −0.374."),
+    ("code", """S1 = D.SPIN1
+L = 40
+ra = D.dmrg(D.aklt(L), chi=[8, 16], sweeps=3)
+rh = D.dmrg(D.heisenberg(L, spin=1), chi=[16, 32, 48], sweeps=3)
+print(f"AKLT: E0 = {ra.energy:.10f}  (exact {-2 / 3 * (L - 1):.10f}),  max chi = {max(ra.mps.bond_dims)}")
+r_ = np.arange(2, 22)
+for res, lab in ((ra, "AKLT"), (rh, "S = 1 Heisenberg")):
+    so = [res.mps.correlation(S1["Sz"], S1["Sz"], 9, 9 + x, string=S1["string"]).real for x in r_]
+    plt.plot(r_, so, "o-", label=lab)
+plt.axhline(-4 / 9, c="tab:blue", ls=":"); plt.axhline(-0.374, c="tab:orange", ls=":")
+plt.xlabel("distance"); plt.ylabel("string order"); plt.legend(); plt.title("hidden topological (string) order")"""),
+    ("md", "## 5 · Hubbard chain: Mott plateau and doping\nThe DMRG here does not fix the particle number, so scanning $\\mu$ fills the chain. The density stays pinned at one electron per site over a window of width ≈ the charge gap: that plateau is the Mott insulator."),
+    ("code", """L, U = 12, 4.0
+nu = D.ELECTRON["n"]
+mus = np.linspace(0.0, 4.0, 9)
+dens = []
+for m_ in mus:
+    rr = D.dmrg(D.hubbard(L, 1.0, U, mu=m_), chi=[24, 48], sweeps=3)
+    dens.append(rr.mps.expect(nu).sum() / L)
+plt.plot(mus, dens, "o-"); plt.axhline(1, c="k", ls=":")
+plt.xlabel("μ"); plt.ylabel("n (electrons per site)"); plt.title(f"Hubbard chain L = {L}, U = {U}: Mott plateau")"""),
+    ("code", """# any 1D hopforge model + interactions: SSH chain with Hubbard U
+ssh = hf.models.ssh(v=0.5, w=1.0).make_spinful()
+H = D.from_model(ssh, 8, U=2.0, mu=1.0)
+rr = D.dmrg(H, chi=[24, 48], sweeps=3)
+print(rr)
+plt.plot(rr.entropy, "o-"); plt.xlabel("bond"); plt.ylabel("S"); plt.title("SSH-Hubbard: entanglement follows the dimerisation")"""),
+    ("md", "## Summary\n* MPOs for any operator string; fermions handled by Jordan-Wigner strings.\n* DMRG reaches converged energies of 100+ site chains in seconds to minutes, with the truncation error as an error bar.\n* Entanglement gives central charges; string order identifies the Haldane phase; a μ scan finds the Mott gap.\n* Benchmarks: $E_0(L=100)=-44.127739$, exact Ising energies, $c=1/2$ and $1$, AKLT $-2/3$ and $-4/9$, ED agreement for Hubbard."),
+] + quiz_cells(22, "DMRG and tensor networks")
+
+
+NOTEBOOKS["23_finite_bias_negf"] = [
+    ("md", r"""# 23 · Non-equilibrium Green's functions at finite bias
+
+Linear-response transport (tutorials 08–12) needs only $T(E_F)$. At finite bias the leads sit at different
+chemical potentials $\mu_L=\mu+V/2$, $\mu_R=\mu-V/2$, and the device is out of equilibrium:
+
+$$G^<=i\sum_\alpha f_\alpha\,G\Gamma_\alpha G^\dagger,\qquad n_i=\int\frac{dE}{2\pi}\sum_\alpha f_\alpha[G\Gamma_\alpha G^\dagger]_{ii},\qquad
+I=\frac{e}{h}\int dE\,T(E,V)\,[f_L-f_R].$$
+
+`hf.transport.negf.solve` computes the density, the current, bond currents and, optionally, a **self-consistent
+electrostatic potential** at the Hartree level, $\phi_i=U_H(n_i-n_i^0)+\phi^{\rm ext}_i$. The equilibrium part of
+the density is integrated on a complex contour, so bound states are included."""),
+    ("code", SETUP + "\nfrom hopforge import transport as tr"),
+    ("md", "## 1 · A single resonant level\nA dot site (energy ε₀) is weakly coupled to two chains. The current switches on when $\\mu_L=V/2$ crosses ε₀, so $dI/dV$ peaks at $V=2\\varepsilon_0$. The saturated current is $\\pi\\Gamma$ (wide-band Breit-Wigner)."),
+    ("code", """L, c, tp, eps0 = 11, 5, 0.1, 0.3
+hop = lambda ri, rj, T: T * tp if sorted([round(ri[0]), round(rj[0])]) in ([c - 1, c], [c, c + 1]) else T
+dot = tr.System(hf.models.chain(), lambda r: 0 <= r[0] < L, hopping=hop,
+                onsite=lambda pos, name: eps0 if round(pos[0]) == c else 0.0)
+dot.attach_lead((-1,)); dot.attach_lead((1,))
+Vs = np.linspace(0, 1.4, 36)
+I = [tr.negf.solve(dot, V, profile="flat", kT=0.005, n_energy=401, currents=False).current for V in Vs]
+fig, ax = plt.subplots(1, 2, figsize=(10, 3.6))
+ax[0].plot(Vs, I, "o-"); ax[0].axhline(np.pi * 2 * tp**2, c="k", ls=":", label="πΓ (wide band)")
+ax[0].set_xlabel("V"); ax[0].set_ylabel("I (e/h × t)"); ax[0].legend(); ax[0].set_title("resonant-level I-V")
+ax[1].plot(Vs[1:], np.diff(I) / np.diff(Vs), "s-"); ax[1].axvline(2 * eps0, c="k", ls=":")
+ax[1].set_xlabel("V"); ax[1].set_ylabel("dI/dV (e²/h)"); ax[1].set_title("peak at V = 2ε₀")
+plt.tight_layout()"""),
+    ("md", "## 2 · Resonant-tunnelling diode: negative differential resistance\nTwo barriers define a quantum well. Under bias the potential drops linearly, which drags the well level down. The current peaks when the level aligns with the emitter states, then falls. The Hartree term $U_H$ makes the potential self-consistent: charge in the well raises its energy and shifts the peak."),
+    ("code", """Lr = 30
+def rtd_onsite(pos, name):
+    x = round(pos[0])
+    return 1.0 if x in (10, 11, 18, 19) else 0.0
+rtd = tr.System(hf.models.chain(), lambda r: 0 <= r[0] < Lr, onsite=rtd_onsite)
+rtd.attach_lead((-1,)); rtd.attach_lead((1,))
+mu = -1.7
+Vs = np.linspace(0.0, 1.2, 25)
+V, I0 = tr.negf.iv(rtd, Vs, mu=mu, kT=0.02, n_energy=161, n_jobs=-1)
+V, I1 = tr.negf.iv(rtd, Vs, mu=mu, kT=0.02, n_energy=161, hartree=0.5, n_jobs=-1)
+plt.plot(V, I0, "o-", label="fixed linear drop")
+plt.plot(V, I1, "s-", label="self-consistent (U_H = 0.5)")
+plt.xlabel("V"); plt.ylabel("I (e/h × t)"); plt.legend(); plt.title("double-barrier RTD: peak and NDR")"""),
+    ("code", """Vp = V[np.argmax(I1)]
+r_lin = tr.negf.solve(rtd, Vp, mu=mu, kT=0.02, n_energy=161, currents=False)
+r_sc = tr.negf.solve(rtd, Vp, mu=mu, kT=0.02, n_energy=161, hartree=0.5, currents=False)
+x = np.arange(Lr)
+fig, ax = plt.subplots(1, 2, figsize=(10, 3.6))
+ax[0].plot(x, r_lin.site_potential(), "o-", label="fixed"); ax[0].plot(x, r_sc.site_potential(), "s-", label="self-consistent")
+for b in (10, 11, 18, 19): ax[0].axvspan(b - 0.5, b + 0.5, color="0.9")
+ax[0].set_xlabel("site"); ax[0].set_ylabel("φ"); ax[0].legend(); ax[0].set_title(f"electrostatic potential at V = {Vp:.2f}")
+ax[1].plot(x, r_lin.site_density(), "o-"); ax[1].plot(x, r_sc.site_density(), "s-")
+ax[1].set_xlabel("site"); ax[1].set_ylabel("n"); ax[1].set_title("non-equilibrium density")
+plt.tight_layout(); print("iterations:", r_sc.iterations, " converged:", r_sc.converged)"""),
+    ("md", "## 3 · Bond currents at finite bias in a disordered conductor\nCurrent flows around strong scatterers. Summed over any cross-section, the bond currents equal the Landauer current to machine precision."),
+    ("code", """strip = tr.System(hf.models.square(), lambda r: 0 <= r[0] < 24 and 0 <= r[1] < 10, onsite=tr.anderson(2.0, seed=7))
+strip.attach_lead((-1, 0)); strip.attach_lead((1, 0))
+res = tr.negf.solve(strip, bias=0.4, mu=-1.0, kT=0.01, n_energy=81)
+P = strip.positions()
+Jx, Jy = np.zeros(len(P)), np.zeros(len(P))
+for (a, b), j in zip(res.bonds, res.bond_currents):
+    d = P[b] - P[a]
+    for s_ in (a, b):
+        Jx[s_] += 0.5 * j * d[0]; Jy[s_] += 0.5 * j * d[1]
+plt.figure(figsize=(9, 4))
+plt.quiver(P[:, 0], P[:, 1], Jx, Jy, np.hypot(Jx, Jy), cmap="viridis", scale_units="xy")
+plt.gca().set_aspect("equal"); plt.title(f"bond currents at V = 0.4,  I = {res.current:.4f} e/h·t")
+cuts = []
+for xc in range(23):
+    cuts.append(sum(np.sign(P[b][0] - P[a][0]) * j for (a, b), j in zip(res.bonds, res.bond_currents)
+                    if min(P[a][0], P[b][0]) <= xc + 0.5 < max(P[a][0], P[b][0])))
+print("current through every cross-section:", np.round([min(cuts), max(cuts)], 8))"""),
+    ("md", "## 4 · Linear-response limit\nAt small bias, $dI/dV$ must reduce to the Landauer conductance $T(\\mu)$."),
+    ("code", """for mu_ in (-0.2, 0.0, 0.05, 0.3):
+    G = tr.negf.differential_conductance(dot, 0.0, dV=2e-4, mu=mu_, profile="flat", n_energy=41)
+    print(f"mu = {mu_:+.2f}:  dI/dV = {G:.6f}   T(mu) = {dot.smatrix(mu_).transmission(1, 0):.6f}")"""),
+    ("md", "## Summary\n* `negf.solve(system, bias, ...)` gives the current, non-equilibrium density, potential and bond currents.\n* `hartree=U_H` (or `coulomb=matrix`) makes the electrostatics self-consistent; `iv(...)` runs bias sweeps in parallel.\n* Checks: exact Breit-Wigner integral, current conservation, linear-response limit (benchmarks).\n* Energies in eV give amperes via `result.current_A`."),
+] + quiz_cells(23, "Finite-bias NEGF")
+
+
+NOTEBOOKS["24_gpu_backend_and_community_registry"] = [
+    ("md", r"""# 24 · GPU back-end and the community model registry
+
+**GPU.** `hf.backend.use("cupy")` moves the heavy kernels to an NVIDIA GPU:
+- batched diagonalisation of whole k-point chunks;
+- the Kubo/Berry-curvature kernels (AHC, SHC, OHC, Chern from curvature);
+- KPM Chebyshev recursions (DOS, LDOS, Kubo-Bastin).
+
+Results come back as NumPy arrays, so nothing else changes. Install CuPy matching your CUDA
+(`pip install cupy-cuda12x`). `use("auto")` falls back to the CPU when no GPU is visible.
+
+**Registry.** Every model in hopforge carries a **reference** and a **benchmark** that reproduces a published number.
+`hf.models.validate(name)` checks a model; `register_model(...)` adds yours; packages can ship models as plugins."""),
+    ("code", SETUP),
+    ("md", "## 1 · Choosing a back-end"),
+    ("code", """print("available back-ends:", hf.backend.available())
+import time
+m = hf.models.kane_mele(lso=0.06)
+for be in hf.backend.available():
+    with hf.backend.on(be):
+        t = time.time()
+        r = hf.spin_hall(m, mu=0.0, nk=200)
+        print(f"{be:6s}: sigma_SH = {r.sigma[0]:+.4f}   {time.time() - t:.2f} s")
+with hf.backend.on("auto"):
+    print("auto picked:", hf.backend.name())"""),
+    ("md", """On a GPU node the same cell prints a `cupy` line too. Tips:
+* Use large meshes (`nk` ≥ 300) or large KPM systems: the GPU wins once there is enough work per transfer.
+* `n_jobs` is ignored on the GPU back-end, because CUDA cannot be shared with forked workers. One GPU typically replaces a 40-core node for these kernels.
+* `hf.backend.xp()` returns the active array module if you write your own kernels.
+
+```python
+hf.backend.use("cupy")
+sigma = hf.orbital_hall(model, mu=mus, nk=600)      # Kubo kernel on the GPU
+E, rho = hf.kpm.dos(H_sparse, num_moments=2000, num_vectors=64)
+hf.backend.use("numpy")
+```"""),
+    ("md", "## 2 · The model registry: references and benchmarks"),
+    ("code", """for name in ("haldane", "dice", "rhombohedral_graphene"):
+    print(hf.models.info(name))
+print(hf.models.validate("dice"))"""),
+    ("code", """res = hf.models.validate_all(run_benchmark=False, verbose=False)     # structural checks of every model
+print(sum(r.passed for r in res), "/", len(res), "models pass the structural checks")
+for name in ("kagome", "pyrochlore", "altermagnet_dwave", "bdg_square"):
+    v = hf.models.validate(name)
+    print(f"{name:20s} {'PASS' if v.passed else 'FAIL'}   published {v.benchmark[0]}  |  model {v.benchmark[1]}")"""),
+    ("md", r"""## 3 · Register your own model, with its benchmark
+
+The sawtooth (delta) chain with $t'=\sqrt2\,t$ has an exactly flat band at $E=2t$
+(Huber & Altman, PRB 82, 184502 (2010)). The benchmark reproduces that number, and `validate` checks everything else."""),
+    ("code", """def _sawtooth_benchmark():
+    m = sawtooth()
+    E = m.energies(hf.kmesh(m, 64))[:, 1]
+    return 2.0, round(float(E.mean()), 10), bool(np.ptp(E) < 1e-10 and abs(E.mean() - 2) < 1e-10)
+
+@hf.models.register_model("sawtooth", dim=1, description="sawtooth (delta) chain, flat band for t' = sqrt(2) t",
+                          reference="Huber & Altman, PRB 82, 184502 (2010)",
+                          benchmark=_sawtooth_benchmark, author="tutorial 24", replace=True)
+def sawtooth(t=1.0, tp=np.sqrt(2)):
+    lat = hf.Lattice([[1.0]], [("A", [0]), ("B", [0.5])])
+    m = hf.Model(lat, name="sawtooth chain")
+    m.add_hopping(-t, "A", "A", [1])
+    m.add_hopping(-tp, "A", "B", [0]); m.add_hopping(-tp, "B", "A", [1])
+    return m
+
+print(hf.models.validate("sawtooth"))
+hf.plot_bands(hf.models.get("sawtooth"), hf.kpath(hf.models.get("sawtooth"), [[-0.5], [0], [0.5]], 100))
+plt.title("sawtooth chain: flat band at E = 2t")"""),
+    ("code", """# community benchmarks run together with the built-in ones
+res = hf.benchmarks.run(names=["[community] sawtooth"], verbose=True)"""),
+    ("md", """## 4 · Ship models from your own package
+
+```toml
+# pyproject.toml of your package
+[project.entry-points."hopforge.models"]
+mymodels = "mypackage.hopforge_models"   # importing it calls hf.models.register_model(...)
+```
+
+After `pip install mypackage`, your models appear in `hf.models.list_models()`. `python -m hopforge.benchmarks` runs their benchmarks, and `hf.models.validate_all()` checks them in CI.
+The `community/` folder of the repository has a complete example (`breathing_kagome.py`) and the contribution rules."""),
+    ("md", "## Summary\n* `hf.backend.use('cupy' | 'numpy' | 'auto')` switches the Kubo, k-mesh and KPM kernels to the GPU, with identical results.\n* Every library model has a reference and a benchmark; `validate` / `validate_all` check them.\n* `register_model(..., reference=, benchmark=)` and entry-point plugins make hopforge extensible without forking it."),
+] + quiz_cells(24, "GPU back-end and model registry")
+
+
 def build(execute=False):
     OUT.mkdir(exist_ok=True)
     for name, cells in NOTEBOOKS.items():

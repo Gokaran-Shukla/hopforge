@@ -1,6 +1,6 @@
 # hopforge benchmarks against published results
 
-hopforge 0.7.0: **69/69 pass**. Regenerate with `python -m hopforge.benchmarks -j -1`.
+hopforge 0.8.0: **77/77 pass**. Regenerate with `python -m hopforge.benchmarks -j -1`.
 
 | # | Benchmark | Quantity | Published | hopforge | Status | Reference |
 |---|---|---|---|---|---|---|
@@ -73,3 +73,11 @@ hopforge 0.7.0: **69/69 pass**. Regenerate with `python -m hopforge.benchmarks -
 | 67 | Graphene QAH from Rashba + exchange | Chern number C = 2 in the bulk gap | 2 | 2.0 | pass | Qiao et al., PRB 82, 161414(R) (2010); Tse, Qiao, Yao, MacDonald & Niu, PRB 83, 155447 (2011) |
 | 68 | Chiral decomposition of ABC graphene | E = (v k)^N / t_perp^(N-1) near K for N = 1..4 | [1, 1, 1, 1] | [0.9999, 0.9997, 0.9996, 0.9994] | pass | Min & MacDonald, PRB 77, 155416 (2008) |
 | 69 | Valley Chern number of gapped ABC graphene | +-N/2 per valley (N = 2, 3) | [1, -1, 1.5, -1.5] | [1.0, -1.0, 1.5, -1.5] | pass | Zhang, Sahu, Min & MacDonald, PRB 82, 035409 (2010); Zhang et al., PRL 106, 156801 (2011) |
+| 70 | DMRG: Heisenberg chain L = 100 (open) | ground-state energy E0 = -44.127739 (converged DMRG) | -44.127739 | -44.12774 | pass | White, PRL 69, 2863 (1992); ITensor reference, Fishman, White & Stoudenmire, SciPost Phys. Codebases 4 (2022) |
+| 71 | DMRG: critical Ising chain L = 64 (open) | E0 = exact free-fermion value; central charge c = 1/2 | (-81.12598, 0.5) | (-81.12598, 0.514) | pass | Lieb, Schultz & Mattis, Ann. Phys. 16, 407 (1961); Calabrese & Cardy, J. Stat. Mech. P06002 (2004) |
+| 72 | DMRG: Heisenberg central charge | c = 1 from S(l) of a 60-site open chain | 1.0 | 1.009 | pass | Calabrese & Cardy, J. Stat. Mech. P06002 (2004) |
+| 73 | DMRG: AKLT chain | E0 = -2/3 per bond; string order -4/9 | (-26.0, -0.444444) | (-26.0, -0.444444) | pass | Affleck, Kennedy, Lieb & Tasaki, PRL 59, 799 (1987); den Nijs & Rommelse, PRB 40, 4709 (1989) |
+| 74 | DMRG vs exact diagonalisation (Hubbard) | open 8-site Hubbard chain, U = 4, half filling | -4.235807 | -4.235807 | pass | Lieb & Wu, PRL 20, 1445 (1968) model; ED reference in hopforge.manybody |
+| 75 | NEGF: resonant level at finite bias | I = (e/h) int T_BW(E) dE with energy-dependent widths (t' = 0.05, V = 1) | 0.015146 | 0.015147 | pass | Breit & Wigner (1936); Datta, Quantum Transport (2005), ch. 3 & 9 |
+| 76 | NEGF: current conservation at finite bias | bond currents through every cross-section = Landauer I (disordered strip) | 0.542845 | (0.542845, 0.542845) | pass | Caroli et al., J. Phys. C 4, 916 (1971); Meir & Wingreen, PRL 68, 2512 (1992) |
+| 77 | NEGF: linear-response limit | dI/dV at V -> 0 equals the Landauer conductance T(mu) | 0.803193 | 0.803192 | pass | Landauer (1957); Buettiker (1986) |

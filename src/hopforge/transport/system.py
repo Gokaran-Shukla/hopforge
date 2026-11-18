@@ -182,30 +182,81 @@ class Lead:
         return len(self.sites0) * self.ns
 
     # ---------------------------------------------------------------------
-    def surface_green(self, energy, params=None, eta=1e-10, maxiter=200, tol=1e-13):
-        """Retarded surface Green's function of the isolated semi-infinite lead
-        (Lopez Sancho - Rubio decimation)."""
-        key = ("g", complex(energy), eta, _key(params))
-        if key[3] is not None and key in self._cache:
-            return self._cache[key]
-        H0, Vm = self.matrices(params)[:2]
+    @staticmethod
+    def _decimate(H0, Vm, z, maxiter, tol):
         n = H0.shape[0]
-        z = energy + 1j * eta
         I = np.eye(n)
         es, e = H0.astype(complex).copy(), H0.astype(complex).copy()
         a, b = Vm.astype(complex).copy(), Vm.conj().T.astype(complex).copy()
+        ok = False
+        with np.errstate(all="ignore"):
+            return Lead._decimate_core(H0, Vm, z, maxiter, tol, n, I, es, e, a, b)
+
+    @staticmethod
+    def _decimate_core(H0, Vm, z, maxiter, tol, n, I, es, e, a, b):
+        ok = False
         for _ in range(maxiter):
-            g = np.linalg.solve(z * I - e, np.hstack([a, b]))
+            try:
+                g = np.linalg.solve(z * I - e, np.hstack([a, b]))
+            except np.linalg.LinAlgError:
+                return np.full((n, n), np.nan, complex), False
             ga, gb = g[:, :n], g[:, n:]
             agb, bga = a @ gb, b @ ga
             es = es + agb
             e = e + agb + bga
             a, b = a @ ga, b @ gb
             if np.abs(a).max() < tol and np.abs(b).max() < tol:
+                ok = True
+                break
+        try:
+            gs = np.linalg.inv(z * I - es)
+            # verify the surface Dyson equation g = (z - H0 - V g V^dag)^-1
+            res = np.abs(np.linalg.inv(gs) - (z * I - H0 - Vm @ gs @ Vm.conj().T)).max()
+        except np.linalg.LinAlgError:
+            return np.full((n, n), np.nan, complex), False
+        scale = 1 + np.abs(H0).max() + np.abs(Vm).max()
+        return gs, ok and np.isfinite(res) and res < 1e-6 * scale and (gs.imag.diagonal() <= 1e-12).all()
+
+    @staticmethod
+    def _layers(H0, Vm, m):
+        """Principal layer of m consecutive cells (surface cell first)."""
+        if m == 1:
+            return H0, Vm
+        n = H0.shape[0]
+        H = np.zeros((m * n, m * n), complex)
+        V = np.zeros((m * n, m * n), complex)
+        for i in range(m):
+            H[i * n:(i + 1) * n, i * n:(i + 1) * n] = H0
+            if i + 1 < m:
+                H[i * n:(i + 1) * n, (i + 1) * n:(i + 2) * n] = Vm
+                H[(i + 1) * n:(i + 2) * n, i * n:(i + 1) * n] = Vm.conj().T
+        V[(m - 1) * n:, :n] = Vm
+        return H, V
+
+    def surface_green(self, energy, params=None, eta=1e-10, maxiter=200, tol=1e-13):
+        """Retarded surface Green's function of the isolated semi-infinite lead
+        (Lopez Sancho - Rubio decimation), verified against the surface Dyson
+        equation g = (z - H0 - V g V^dag)^-1. Decimation is ill-conditioned
+        where E is an eigenvalue of the single-cell Hamiltonian (e.g. exactly at
+        the band centre of a chain); there the lead is regrouped into principal
+        layers of 2 or 3 cells (exact), and only as a last resort the broadening
+        is increased (<= 1e-6 x bandwidth)."""
+        key = ("g", complex(energy), eta, _key(params))
+        if key[3] is not None and key in self._cache:
+            return self._cache[key]
+        H0, Vm = self.matrices(params)[:2]
+        n = H0.shape[0]
+        scale = 1 + np.abs(H0).max() + 2 * np.abs(Vm).max()
+        attempts = [(1, eta), (2, eta), (3, eta)] + [(m, max(eta, f * scale)) for f in (1e-8, 1e-7, 1e-6) for m in (1, 2, 3)]
+        for m, et in attempts:
+            Hm, Vmm = self._layers(H0, Vm, m)
+            g, ok = self._decimate(Hm, Vmm, energy + 1j * et, maxiter, tol)
+            if ok:
+                gs = g[:n, :n]
                 break
         else:
+            gs = g[:n, :n]
             warnings.warn("surface Green's function did not converge; increase eta")
-        gs = np.linalg.inv(z * I - es)
         if key[3] is not None:
             if len(self._cache) > 256:
                 self._cache.clear()

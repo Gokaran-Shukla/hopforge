@@ -7,3 +7,4 @@ from .system import System, Lead, landau_gauge, field_gauge, anderson
 from .solver import (SMatrix, smatrix, conductance, andreev_conductance, sweep, disorder_average,
                      spectrum, current, iv_curve, bias_potential, G0_SIEMENS)
 from .plot import plot_system, plot_map, plot_current
+from . import negf

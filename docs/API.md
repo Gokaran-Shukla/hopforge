@@ -67,33 +67,38 @@ Library of published tight-binding models. See :func:`list_models`.
 * **`checkerboard(t=1.0, tp=1.0)`**: Checkerboard (planar pyrochlore) lattice: NN t and crossed-plaquette NNN tp (A along x, B along y). Flat band at E = 2t when tp = t.
 * **`checkerboard_chern(t=1.0, tp=0.3, tpp=-0.2, phi=0.7853981633974483)`**: Flat-band Chern insulator on the checkerboard lattice (Sun, Gu, Katsura & Das Sarma, PRL 106, 236803 (2011); parameters of Sheng, Gu, Sun & Sheng, Nat. Commun. 2, 389 (2011): t' = 0.3, t'' = -0.2, phi = pi/4, gap/bandwidth ~ 27); the host of fractional Chern insulators (Regnault & Bernevig, PRX 1, 021014 (2011)). NN -t e^{i phi s_x s_y}, NNN -/+t' (staggered), diagonal -t''.
 * **`chirality(model, i, j, R, nn_dist, tol=0.0001, search=2)`**: nu_ij = sign((d_ik x d_kj)_z) for the shortest two-step path i -> k -> j through a nearest neighbour k (Haldane / Kane-Mele sign).
+* **`community_benchmarks()`**: Benchmark entries of community-registered models (callables only), in the format of hopforge.benchmarks.REGISTRY.
 * **`creutz_ladder(t=1.0, theta=1.5707963267948966, mperp=0.0)`**: Creutz ladder (PRL 83, 2636 (1999)): flat bands at +-2t for theta = pi/2, mperp = 0 (Aharonov-Bohm caging).
 * **`cubic(t=1.0)`**: Simple cubic lattice: E = -2t (cos kx + cos ky + cos kz).
 * **`diamond_fkm(t=1.0, dt=0.4, lso=0.125)`**: Fu-Kane-Mele diamond-lattice topological insulator (PRL 98, 106803 (2007)). NN hopping t (t + dt on the [111] bond), NNN SOC i (8 lso / a^2) s . (d1 x d2). Strong TI (1;111) for dt > 0.
 * **`dice(t=1.0, alpha=1.0)`**: alpha-T3 / dice lattice (Raoux et al., PRL 112, 026402 (2014)): hub site H coupled to rim A with t and to rim B with alpha*t. Flat band at E = 0.
 * **`fcc(t=1.0)`**: Face-centred cubic lattice (conventional a = 1).
-* **`get(name, **params)`**: Build a model by name, e.g. ``get('haldane', t2=0.2)``.
+* **`get(name, **params)`**: 
 * **`graphene(t=1.0, delta=0.0, t2=0.0)`**: Graphene / honeycomb lattice (Wallace 1947). ``delta`` = +-delta staggered (hBN-like) potential, ``t2`` = NNN hopping. Dirac points at K, K'.
 * **`haldane(t=1.0, t2=0.1, phi=1.5707963267948966, M=0.0)`**: Haldane model (PRL 61, 2015 (1988)): Chern insulator with C = +-1 for |M| < 3 sqrt(3) |t2 sin phi|.
 * **`hofstadter(p=1, q=3, t=1.0)`**: Harper-Hofstadter model (PRB 14, 2239 (1976)): square lattice with flux p/q per plaquette (Landau gauge, q x 1 magnetic supercell).
 * **`honeycomb(t=1.0, delta=0.0, t2=0.0)`**: Graphene / honeycomb lattice (Wallace 1947). ``delta`` = +-delta staggered (hBN-like) potential, ``t2`` = NNN hopping. Dirac points at K, K'.
+* **`info(name)`**: Registry entry: description, reference, benchmark, author, source.
 * **`kagome(t=1.0, lso=0.0)`**: Kagome lattice: flat band at E = 2t. With ``lso`` the spinful Guo-Franz intrinsic SOC i lso nu sz on NN bonds (PRB 80, 113102 (2009)).
 * **`kane_mele(t=1.0, lso=0.06, lv=0.0, lr=0.0)`**: Kane-Mele model (PRL 95, 226801 & 146802 (2005)). Quantum spin Hall (Z2 = 1) for lv < 3 sqrt(3) lso when lr = 0.
 * **`kitaev_chain(mu=0.5, t=1.0, delta=1.0)`**: Kitaev p-wave chain in Bogoliubov-de Gennes form (Phys.-Usp. 44, 131 (2001)). Basis (e, h). Topological for |mu| < 2|t|; chiral operator tau_x.
 * **`lieb(t=1.0, delta=0.0)`**: Lieb lattice (CuO2-plane-like): flat band at E = 0 touching a Dirac cone at M. ``delta`` shifts the corner site.
-* **`list_models(dim=None)`**: Print the available models (optionally only one dimension).
+* **`list_models(*a, **kw)`**: 
+* **`load_plugins(verbose=False)`**: Import models published by other packages under the ``hopforge.models`` entry-point group.
 * **`p_ip_superconductor(t=1.0, mu=-1.0, delta=0.5)`**: Spinless chiral p+ip superconductor on the square lattice (Read & Green, PRB 61, 10267 (2000); Bernevig & Hughes, ch. 16), BdG basis (e, h): xi = -2t (cos kx + cos ky) - mu,  Delta_k = delta (sin kx + i sin ky). Weak pairing |mu| < 4t: C = +-1 (sign flips at mu = 0); |mu| > 4t: C = 0.
 * **`p_orbital_square(pps=1.0, ppp=-0.3, pps2=0.3, ppp2=-0.1, lso=0.0, J=0.0)`**: Square lattice of px, py, pz orbitals with Slater-Koster hopping: the standard toy model of the orbital Hall effect (Bhowal & Vignale PRB 103, 195309 (2021); Go et al. PRL 121, 086602 (2018)). Optional on-site lso L.S (spinful) and exchange J along z. NNN bonds (pps2, ppp2) are what hybridise px and py and give a finite orbital Hall conductivity.
 * **`pyrochlore(t=1.0)`**: Pyrochlore lattice (corner-sharing tetrahedra): two flat bands at E = 2t.
 * **`qwz(m_=1.0, t=1.0)`**: Qi-Wu-Zhang Chern insulator (PRB 74, 085308 (2006)): H = t sin kx sx + t sin ky sy + (m + t cos kx + t cos ky) sz. C = +-1 for 0 < |m| < 2t.
 * **`rashba_square(t=1.0, alpha=0.3, J=0.0, direction=(0, 0, 1))`**: Square lattice with Rashba SOC and optional exchange J (2D Rashba ferromagnet: anomalous Hall, Edelstein, spin-orbit torque physics).
-* **`register_model(name, dim, description='')`**: Decorator that adds a model constructor to the library so it shows up in ``list_models()`` and ``get(name, ...)``::
+* **`register_model(name, dim, description='', reference=None, benchmark=None, author=None, tags=(), replace=False)`**: Decorator adding a model constructor to the registry.
 * **`rice_mele(v=0.5, w=1.0, delta=0.2)`**: Rice-Mele chain (PRL 49, 1455 (1982)): SSH plus staggered potential.
 * **`set_points(model, pts, path=None)`**: 
 * **`spin_diag(h_up, h_dn)`**: Orbital-major matrix with spin-diagonal blocks h_up, h_dn.
 * **`square(t=1.0, t2=0.0, eps=0.0)`**: Square lattice with NN t and NNN t2.
 * **`ssh(v=0.5, w=1.0)`**: Su-Schrieffer-Heeger chain (PRL 42, 1698 (1979)). Intra-cell hopping v, inter-cell w; topological (winding 1) for |w| > |v|. A at 0, B at 1/2.
 * **`triangular(t=1.0)`**: Triangular lattice.
+* **`validate(name, run_benchmark=True, nk_test=5, seed=0)`**: Structural checks (builds, Hermitian H(k), dimension, reproducible) and the model's benchmark. Returns a :class:`Validation`.
+* **`validate_all(run_benchmark=True, n_jobs=None, verbose=True)`**: Validate every registered model (parallel over models).
 * **`weyl_minimal(t=1.0, m_=2.0)`**: Minimal two-band Weyl semimetal with two Weyl nodes at k = (0, 0, +-arccos(m - 2)) (1 < m < 3): H = t[sin kx sx + sin ky sy + (m - cos kx - cos ky - cos kz) sz].
 * **`weyl_type2(t=1.0, m_=2.0, tilt=1.5)`**: Weyl semimetal with a tilt along z (type I for tilt < 1, type II with electron and hole pockets touching at the node for tilt > 1; Soluyanov, Gresch, Wang, Wu, Troyer, Dai & Bernevig, Nature 527, 495 (2015)): H = weyl_minimal + t * tilt * cos(kz) * 1.
 * **`wilson_dirac_ti(A=1.0, B=1.0, M=1.0)`**: Four-band cubic-lattice 3D topological insulator (Bi2Se3-type Wilson-Dirac model, Zhang et al. Nat. Phys. 5, 438 (2009) regularised): H = A sum_i sin k_i tau_x s_i + (M - 2B sum_i (1 - cos k_i)) tau_z. Strong TI (1;000) for 0 < M/B < 4.
@@ -134,7 +139,7 @@ Kernel polynomial method (KPM) for large sparse Hamiltonians.
 * **`jackson_kernel(N)`**: 
 * **`ldos(H, sites, energies, num_moments=400, kernel='jackson', ns=1, bounds=None)`**: KPM local DOS on the given basis indices (exact unit vectors, no stochastic error). With ``ns`` > 1, ``sites`` are site indices and the internal (spin) components are summed. Returns array (len(sites), nE).
 * **`lorentz_kernel(N, lam=4.0)`**: 
-* **`moments(H, num_moments=200, vectors=None, num_vectors=10, operator=None, seed=0, bounds=None)`**: Chebyshev moments mu_n = <v| O T_n(H~) |v> (averaged over vectors).
+* **`moments(H, num_moments=200, vectors=None, num_vectors=10, operator=None, seed=0, bounds=None)`**: Chebyshev moments mu_n = <v| O T_n(H~) |v> (averaged over vectors). The recursion runs on the active back-end (GPU with hf.backend.use('cupy')).
 * **`spectral_bounds(H, margin=0.01)`**: Estimate (Emin, Emax) with a sparse eigensolver (Gershgorin fallback).
 
 ## `hopforge.surface`

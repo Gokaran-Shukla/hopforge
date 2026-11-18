@@ -890,6 +890,129 @@ def _md_valley():
 
 
 # =============================================================================
+# DMRG (hopforge.dmrg)
+# =============================================================================
+@benchmark("DMRG: Heisenberg chain L = 100 (open)", "ground-state energy E0 = -44.127739 (converged DMRG)",
+           "White, PRL 69, 2863 (1992); ITensor reference, Fishman, White & Stoudenmire, SciPost Phys. Codebases 4 (2022)")
+def _dmrg_heis():
+    import hopforge as hf
+    r = hf.dmrg.dmrg(hf.dmrg.heisenberg(100), chi=[16, 32, 64, 96], sweeps=4)
+    return -44.127739, round(r.energy, 6), abs(r.energy + 44.127739) < 2e-6
+
+
+@benchmark("DMRG: critical Ising chain L = 64 (open)", "E0 = exact free-fermion value; central charge c = 1/2",
+           "Lieb, Schultz & Mattis, Ann. Phys. 16, 407 (1961); Calabrese & Cardy, J. Stat. Mech. P06002 (2004)")
+def _dmrg_tfim():
+    import hopforge as hf
+    D = hf.dmrg
+    r = D.dmrg(D.tfim(64, 1, 1), chi=[16, 32, 48], sweeps=4)
+    ex = D.tfim_exact_obc(64, 1, 1)
+    c = D.calabrese_cardy_obc(r.entropy, 64)
+    return (round(ex, 6), 0.5), (round(r.energy, 6), round(c, 3)), abs(r.energy - ex) < 1e-6 and abs(c - 0.5) < 0.03
+
+
+@benchmark("DMRG: Heisenberg central charge", "c = 1 from S(l) of a 60-site open chain",
+           "Calabrese & Cardy, J. Stat. Mech. P06002 (2004)")
+def _dmrg_c1():
+    import hopforge as hf
+    D = hf.dmrg
+    r = D.dmrg(D.heisenberg(60), chi=[32, 64, 96], sweeps=3)
+    c = D.calabrese_cardy_obc(r.entropy, 60)
+    return 1.0, round(c, 3), abs(c - 1) < 0.05
+
+
+@benchmark("DMRG: AKLT chain", "E0 = -2/3 per bond; string order -4/9",
+           "Affleck, Kennedy, Lieb & Tasaki, PRL 59, 799 (1987); den Nijs & Rommelse, PRB 40, 4709 (1989)")
+def _dmrg_aklt():
+    import hopforge as hf
+    D = hf.dmrg
+    L = 40
+    r = D.dmrg(D.aklt(L), chi=[8, 16], sweeps=3)
+    S1 = D.SPIN1
+    so = r.mps.correlation(S1["Sz"], S1["Sz"], 10, 30, string=S1["string"]).real
+    return (round(-2 / 3 * (L - 1), 6), round(-4 / 9, 6)), (round(r.energy, 6), round(so, 6)), \
+        abs(r.energy + 2 / 3 * (L - 1)) < 1e-8 and abs(so + 4 / 9) < 1e-6
+
+
+@benchmark("DMRG vs exact diagonalisation (Hubbard)", "open 8-site Hubbard chain, U = 4, half filling",
+           "Lieb & Wu, PRL 20, 1445 (1968) model; ED reference in hopforge.manybody")
+def _dmrg_hub():
+    import hopforge as hf
+    L = 8
+    ed = hf.manybody.Hubbard(hf.models.chain().finite(L), U=4.0).ground_state(L // 2, L // 2)
+    ed = ed[0] if isinstance(ed, tuple) else ed
+    r = hf.dmrg.dmrg(hf.dmrg.hubbard(L, 1, 4), chi=[32, 64, 128], sweeps=5)
+    e = r.energy + 2 * L                       # undo the -U/2 N chemical potential
+    return round(float(ed), 8), round(e, 8), abs(e - ed) < 1e-7
+
+
+# =============================================================================
+# finite-bias NEGF (hopforge.transport.negf)
+# =============================================================================
+@benchmark("NEGF: resonant level at finite bias", "I = (e/h) int T_BW(E) dE with energy-dependent widths (t' = 0.05, V = 1)",
+           "Breit & Wigner (1936); Datta, Quantum Transport (2005), ch. 3 & 9")
+def _negf_res():
+    import hopforge as hf
+    from hopforge import transport as tr
+    L, c, tp, V = 11, 5, 0.05, 1.0
+
+    def hop(ri, rj, T):
+        xs = sorted([round(ri[0]), round(rj[0])])
+        return T * tp if xs in ([c - 1, c], [c, c + 1]) else T
+
+    s = tr.System(hf.models.chain(), lambda r: 0 <= r[0] < L, hopping=hop)
+    s.attach_lead((-1,)); s.attach_lead((1,))
+    I = tr.negf.solve(s, bias=V, profile="flat", n_energy=2001, currents=False).current
+    E = np.linspace(-V / 2, V / 2, 200001)
+    g = lambda e: (e - 1j * np.sqrt(4 - e ** 2 + 0j)) / 2
+    SL, SR = tp ** 2 * g(E - V / 2), tp ** 2 * g(E + V / 2)
+    GL, GR = -2 * SL.imag, -2 * SR.imag
+    T = GL * GR / ((E - (SL + SR).real) ** 2 + ((GL + GR) / 2) ** 2)
+    trapz = getattr(np, "trapezoid", None) or np.trapz
+    ref = trapz(T, E)
+    return round(ref, 7), round(I, 7), abs(I / ref - 1) < 1e-3
+
+
+@benchmark("NEGF: current conservation at finite bias", "bond currents through every cross-section = Landauer I (disordered strip)",
+           "Caroli et al., J. Phys. C 4, 916 (1971); Meir & Wingreen, PRL 68, 2512 (1992)")
+def _negf_cons():
+    import hopforge as hf
+    from hopforge import transport as tr
+    s = tr.System(hf.models.square(), lambda r: 0 <= r[0] < 8 and 0 <= r[1] < 4, onsite=tr.anderson(1.5, seed=3))
+    s.attach_lead((-1, 0)); s.attach_lead((1, 0))
+    r = tr.negf.solve(s, bias=0.3, mu=-1.0, kT=0.01, n_energy=101)
+    P = s.positions()
+    cuts = []
+    for x in range(7):
+        J = 0.0
+        for (a, b), j in zip(r.bonds, r.bond_currents):
+            if min(P[a][0], P[b][0]) <= x + 0.5 < max(P[a][0], P[b][0]):
+                J += np.sign(P[b][0] - P[a][0]) * j
+        cuts.append(J)
+    spread = max(abs(np.array(cuts) - r.current))
+    return round(r.current, 6), (round(min(cuts), 6), round(max(cuts), 6)), spread < 1e-6
+
+
+@benchmark("NEGF: linear-response limit", "dI/dV at V -> 0 equals the Landauer conductance T(mu)",
+           "Landauer (1957); Buettiker (1986)")
+def _negf_lin():
+    import hopforge as hf
+    from hopforge import transport as tr
+    L, c, tp, mu = 11, 5, 0.1, 0.01
+
+    def hop(ri, rj, T):
+        xs = sorted([round(ri[0]), round(rj[0])])
+        return T * tp if xs in ([c - 1, c], [c, c + 1]) else T
+
+    s = tr.System(hf.models.chain(), lambda r: 0 <= r[0] < L, hopping=hop)
+    s.attach_lead((-1,)); s.attach_lead((1,))
+    G = tr.negf.differential_conductance(s, 0.0, dV=2e-4, mu=mu, kT=0.0, profile="flat", n_energy=41)
+    T = s.smatrix(mu).transmission(1, 0)
+    return round(T, 6), round(G, 6), abs(G - T) < 1e-4
+
+
+
+# =============================================================================
 # helpers
 # =============================================================================
 def silicon_vogl(a=5.431):
@@ -942,7 +1065,8 @@ def _run_one(entry):
 def run(n_jobs=None, names=None, verbose=True, write=None):
     """Run all benchmarks (parallel over benchmarks). Returns a list of Result."""
     from .parallel import pmap
-    entries = [e for e in REGISTRY if names is None or e[0] in names]
+    from .models import community_benchmarks
+    entries = [e for e in REGISTRY + community_benchmarks() if names is None or e[0] in names]
     res = pmap(_run_one, entries, n_jobs)
     if verbose:
         print(table(res))

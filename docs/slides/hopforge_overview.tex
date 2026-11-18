@@ -52,7 +52,7 @@
   literate={²}{{$^2$}}1 {θ}{{$\theta$}}1 {λ}{{$\lambda$}}1 {Δ}{{$\Delta$}}1 {μ}{{$\mu$}}1}
 \lstset{style=py}
 
-\tikzset{box/.style={rounded corners=3pt,draw=none,fill=#1,text=white,font=\scriptsize\bfseries,align=center,minimum height=0.72cm,minimum width=1.95cm,inner sep=2pt},
+\tikzset{box/.style={rounded corners=3pt,draw=none,fill=#1,text=white,font=\scriptsize\bfseries,align=center,minimum height=0.66cm,minimum width=1.8cm,inner sep=1.5pt},
   arr/.style={-{Stealth[length=5pt]},thick,navy!50},
   st/.style={rounded corners=2pt,fill=#1,text=white,font=\scriptsize\bfseries,minimum width=4.6cm,minimum height=0.42cm}}
 \newcommand{\fig}[2][]{\includegraphics[#1]{fig/#2}}
@@ -64,7 +64,7 @@
 \subtitle{A universal tight-binding engine: models, topology, response, quantum transport,\\ strong correlations and moiré physics in one Python package}
 \author{Gokaran Shukla}
 \institute{King Abdullah University of Science and Technology (KAUST)\\\texttt{github.com/Gokaran-Shukla/hopforge}}
-\date{Version 0.7.0 \textbullet{} November 2026}
+\date{Version 0.8.0 \textbullet{} November 2026}
 
 \begin{document}
 
@@ -82,21 +82,21 @@
     {\normalsize\color{white!75}models \textbullet{} topology \textbullet{} linear response \textbullet{} quantum transport\\
      strong correlations \textbullet{} quantum phases \textbullet{} moiré \& orbitronics}\\[22pt]
     {\normalsize\bfseries Gokaran Shukla}\\[2pt]
-    {\small\color{white!75}KAUST \textbullet{} v0.7.0 \textbullet{} November 2026}\\[2pt]{\small\color{accent}github.com/Gokaran-Shukla/hopforge}};
+    {\small\color{white!75}KAUST \textbullet{} v0.8.0 \textbullet{} November 2026}\\[2pt]{\small\color{accent}github.com/Gokaran-Shukla/hopforge}};
 \end{tikzpicture}
 \end{frame}
 }
 
 \begin{frame}{hopforge at a glance}
 \centering
-\stat{36}{library models}\hfill\stat{69/69}{published benchmarks}\hfill\stat{121}{automated tests}\hfill\stat{21}{executed tutorials}\hfill\stat{420}{quiz questions}
+\stat{36}{benchmarked models}\hfill\stat{77/77}{published benchmarks}\hfill\stat{140}{automated tests}\hfill\stat{24}{executed tutorials}\hfill\stat{480}{quiz questions}
 \vspace{10pt}
 \begin{columns}[T]
 \begin{column}{0.5\textwidth}
 \begin{itemize}\small
 \item \textbf{Any} tight-binding model: 0D--3D, spinful, matrix hoppings, Slater-Koster $s/p/d$, $k\!\cdot\!p$ discretisation, Wannier90
-\item \textbf{One model, every tool}: bands, topology, Kubo, Boltzmann, Landauer, KPM, surfaces, ED, Floquet
-\item \textbf{Parallel} on a full node: \texttt{n\_jobs=40}
+\item \textbf{One model, every tool}: bands, topology, Kubo, Boltzmann, Landauer, finite-bias NEGF, KPM, surfaces, ED, DMRG, Floquet
+\item \textbf{Parallel} on a full node (\texttt{n\_jobs=40}) or on a GPU (\texttt{backend.use("cupy")})
 \end{itemize}
 \end{column}
 \begin{column}{0.5\textwidth}
@@ -112,12 +112,12 @@
 \begin{frame}{Outline}
 \vspace{6pt}
 \begin{tabular}{@{}r@{\hspace{8pt}}p{5.6cm}r@{\hspace{8pt}}p{5.6cm}@{}}
-{\color{accent}\bfseries 01} & Building Hamiltonians & {\color{accent}\bfseries 07} & Strong correlations and quantum phases\\[5pt]
-{\color{accent}\bfseries 02} & Topology & {\color{accent}\bfseries 08} & Validation\\[5pt]
-{\color{accent}\bfseries 03} & Linear response & {\color{accent}\bfseries 09} & Performance\\[5pt]
-{\color{accent}\bfseries 04} & Quantum transport and large-scale methods & {\color{accent}\bfseries 10} & Learning: tutorials and quizzes\\[5pt]
-{\color{accent}\bfseries 05} & Orbitronics, torques and moiré bilayers & {\color{accent}\bfseries 11} & Status and outlook\\[5pt]
-{\color{accent}\bfseries 06} & Allan MacDonald's models & &\\[5pt]
+{\color{accent}\bfseries 01} & Building Hamiltonians & {\color{accent}\bfseries 07} & Strong correlations and quantum phases\\[4pt]
+{\color{accent}\bfseries 02} & Topology & {\color{accent}\bfseries 08} & DMRG, finite-bias NEGF, GPU, community\\[4pt]
+{\color{accent}\bfseries 03} & Linear response & {\color{accent}\bfseries 09} & Validation\\[4pt]
+{\color{accent}\bfseries 04} & Quantum transport and large-scale methods & {\color{accent}\bfseries 10} & Performance\\[4pt]
+{\color{accent}\bfseries 05} & Orbitronics, torques and moiré bilayers & {\color{accent}\bfseries 11} & Learning: tutorials and quizzes\\[4pt]
+{\color{accent}\bfseries 06} & Allan MacDonald's models & {\color{accent}\bfseries 12} & Status and outlook\\[4pt]
 \end{tabular}
 \end{frame}
 
@@ -161,13 +161,14 @@ $\En{E},\En{\mu},\En{\Gamma}$ & energies, broadening\\
 \node[box=navy!80,below=0.25 of inp3](inp4){$k\!\cdot\!p$ $\to$ discretize};
 \node[box=accent,minimum height=3.6cm,minimum width=2.4cm,right=0.7 of $(inp2.east)!0.5!(inp3.east)$](M){\large Model\\[4pt]\scriptsize $\Hm{H(\mathbf k)}$, $\Ve{v(\mathbf k)}$\\sparse $\Hm{H}$\\operators\\supercell, ribbon,\\flake, slab};
 \foreach \n in {inp1,inp2,inp3,inp4}{\draw[arr](\n.east)--(M.west|-\n.east);}
-\matrix[right=0.8 of M,row sep=4pt,column sep=3pt,ampersand replacement=\&](S){
+\matrix[right=0.6 of M,row sep=3pt,column sep=3pt,ampersand replacement=\&](S){
 \node[box=teal]{Bands, DOS\\weights};\&\node[box=teal]{Topology\\Chern, Z2, WCC};\&\node[box=teal]{Kubo\\AHC SHC OHC};\\
 \node[box=teal]{Boltzmann\\Edelstein, BCD};\&\node[box=teal]{Landauer\\transport};\&\node[box=teal]{KPM\\$10^6$ orbitals};\\
 \node[box=teal]{Surface\\spectra};\&\node[box=teal]{Torques\\Kubo-Středa};\&\node[box=teal]{Moiré\\bilayers};\\
-\node[box=teal]{Mean field\\Floquet};\&\node[box=teal]{Exact\\diagonalisation};\&\node[box=teal]{Phase\\diagrams};\\};
+\node[box=teal]{Mean field\\Floquet};\&\node[box=teal]{Exact\\diagonalisation};\&\node[box=teal]{Phase\\diagrams};\\
+\node[box=accent!85!black]{DMRG\\MPS / MPO};\&\node[box=accent!85!black]{NEGF\\finite bias};\&\node[box=accent!85!black]{GPU\\back-end};\\};
 \draw[arr](M.east)--(S.west);
-\node[below=0.3 of S,font=\tiny,text=grayt,xshift=-2cm]{every solver accepts \texttt{n\_jobs} \textbullet{} parallel \texttt{pmap} with one BLAS thread per worker};
+\node[below=0.3 of S,font=\tiny,text=grayt,xshift=-2cm]{every solver accepts \texttt{n\_jobs} \textbullet{} \texttt{pmap} with one BLAS thread per worker \textbullet{} CuPy GPU back-end};
 \end{tikzpicture}
 \end{frame}
 
@@ -555,13 +556,104 @@ Kitaev honeycomb & bond-dependent Pauli model, cluster ED & Ann.\ Phys.\ 321, 2 
 \end{frame}
 
 % =====================================================================
+\section{DMRG, finite-bias NEGF, GPU, community}
+
+\begin{frame}{DMRG and matrix-product states (\texttt{hf.dmrg})}
+\begin{columns}[T]
+\begin{column}{0.36\textwidth}
+\tiny
+\[\Hm{H}=\sum_{\text{terms}} \Hp{c}\,O^{(1)}_{i_1}O^{(2)}_{i_2}\cdots\;\to\;\text{MPO}\]
+\vspace{-6pt}
+\begin{itemize}\tiny
+\item any operator string; Jordan-Wigner strings automatic; SVD-compressed MPO
+\item Heisenberg/XXZ/$J_1$-$J_2$ ($S=\frac12,1$), AKLT, TFIM, Hubbard, $t$-$V$, \texttt{from\_model} + $\Hp{U},\Hp{V}$
+\item two-site DMRG, $\chi$ schedule, truncation error, excited states
+\item correlations, string order, entanglement, central charge
+\end{itemize}
+\vspace{2pt}
+{\color{accent}\bfseries Benchmarks:} $E_0(L{=}100)=-44.127739$; exact Ising; $c=\tfrac12,1$; AKLT $-\tfrac23$, $-\tfrac49$; ED Hubbard
+\end{column}
+\begin{column}{0.62\textwidth}
+\centering
+\fig[width=\linewidth]{dmrg_conv.png}\\[-1pt]
+{\tiny\color{grayt}100-site Heisenberg chain: convergence, truncation, entanglement}\\[3pt]
+\fig[width=0.47\linewidth]{dmrg_string.png}\hfill\fig[width=0.47\linewidth]{dmrg_mott.png}\\[-1pt]
+{\tiny\color{grayt}Haldane string order (AKLT $-4/9$)\hfill Hubbard Mott plateau}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Finite-bias NEGF (\texttt{transport.negf})}
+\begin{columns}[T]
+\begin{column}{0.38\textwidth}
+\tiny
+\[\Gf{G^<}=i\sum_\alpha f_\alpha\,\Gf{G}\,\Gamma_\alpha\,\Gf{G^\dagger},\quad n_i=\int\!\tfrac{dE}{2\pi}\,[-i\Gf{G^<}]_{ii}\]
+\[\phi_i=\Hp{U_H}\,(n_i-n_i^0)+\phi_i^{\rm ext}\ \ \text{(self-consistent)}\]
+\[I=\tfrac{e}{h}\int dE\,T(E,V)\,[f_L-f_R]\]
+\vspace{-8pt}
+\begin{itemize}\tiny
+\item equilibrium density on a complex contour (bound states included), bias window on the real axis
+\item parallel I-V, $dI/dV$, bond currents at bias
+\item lead solver now exact at band centres (principal-layer regrouping)
+\end{itemize}
+{\color{accent}\bfseries Benchmarks:} Breit-Wigner to $10^{-4}$; current conservation $10^{-6}$; $dI/dV\to T(\mu)$
+\end{column}
+\begin{column}{0.6\textwidth}
+\centering
+\fig[width=0.4\linewidth]{negf_rtd.png}\hfill\fig[width=0.58\linewidth]{negf_curr.png}\\[-1pt]
+{\tiny\color{grayt}resonant-tunnelling diode with NDR\hfill bond currents at $V=0.4$}\\[3pt]
+\fig[width=0.92\linewidth]{negf_pot.png}\\[-1pt]
+{\tiny\color{grayt}self-consistent potential and non-equilibrium density at the current peak}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{GPU back-end and community model registry}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{\color{accent}GPU} \small(\texttt{hf.backend})
+\begin{lstlisting}
+hf.backend.use("cupy")     # or "auto"
+hf.orbital_hall(m, mu=mus, nk=600)
+hf.kpm.dos(H, num_moments=2000)
+hf.backend.use("numpy")
+\end{lstlisting}
+\scriptsize
+\begin{itemize}
+\item batched $\Hm{H(\mathbf k)}$ diagonalisation, Kubo kernels, KPM recursions on CuPy
+\item identical results (tested with a CuPy stand-in; CPU fallback)
+\end{itemize}
+\vspace{2pt}
+\textbf{\color{accent}Registry}
+\begin{itemize}
+\item every one of the 36 models: reference + benchmark
+\item \texttt{validate}, \texttt{validate\_all} in CI; plugins via the \texttt{hopforge.models} entry point; \texttt{community/} folder
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{lstlisting}
+@hf.models.register_model("sawtooth", 1,
+    reference="Huber & Altman, PRB 82,"
+              " 184502 (2010)",
+    benchmark=_flat_band_at_2t)
+def sawtooth(t=1.0, tp=np.sqrt(2)):
+    ...
+hf.models.validate("sawtooth")   # PASS
+\end{lstlisting}
+\centering\fig[height=2.6cm]{reg_sawtooth.png}
+\figcap{registered model + benchmark: flat band at $E=2t$}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =====================================================================
 \section{Validation}
 
-\begin{frame}{69 benchmarks against published results, run in CI}
+\begin{frame}{77 benchmarks against published results, run in CI}
 \begin{columns}[T]
 \begin{column}{0.56\textwidth}
 \scriptsize
-\renewcommand{\arraystretch}{1.15}
+\renewcommand{\arraystretch}{1.02}
 \begin{tabular}{@{}lrr@{}}
 \toprule
 \textbf{Benchmark} & \textbf{published} & \textbf{hopforge}\\\midrule
@@ -577,6 +669,7 @@ Bose-Hubbard tip $U/zt$ & 5.8284 & 5.8284\\
 Chiral TBG magic $\alpha$ & 0.586 & 0.5857\\
 MoTe$_2$ $C$ at 1.2° (Wu 2019) & $(-1,1)$ & $(-1,1)$\\
 Spin Hall / $(e/8\pi)$ (Sinova) & 1 & 0.995\\
+Heisenberg $E_0$, $L=100$ (DMRG) & $-44.127739$ & $-44.127740$\\
 \bottomrule
 \end{tabular}
 \end{column}
@@ -589,6 +682,7 @@ Spin Hall / $(e/8\pi)$ (Sinova) & 1 & 0.995\\
 \item \textbf{Correlated / phases}: 11
 \item \textbf{Bernevig, moiré, torques}: 11
 \item \textbf{MacDonald group}: 10
+\item \textbf{DMRG / NEGF}: 8
 \end{itemize}
 \vspace{6pt}
 \begin{block}{Reproduce}
@@ -635,7 +729,7 @@ phases.hubbard_phase_diagram(m, Us, fillings,
 % =====================================================================
 \section{Learning: tutorials and quizzes}
 
-\begin{frame}{21 executed tutorials, each with a 20-question quiz}
+\begin{frame}{24 executed tutorials, each with a 20-question quiz}
 \scriptsize
 \renewcommand{\arraystretch}{1.12}
 \begin{columns}[T]
@@ -666,6 +760,9 @@ phases.hubbard_phase_diagram(m, Us, fillings,
 19 & \textbf{Step by step:} interacting phase diagrams\\
 20 & Reproducing research models\\
 21 & Allan MacDonald's models\\
+22 & DMRG and matrix-product states\\
+23 & Finite-bias NEGF, NDR, self-consistency\\
+24 & GPU back-end, model registry\\
 \end{tabular}
 \end{column}
 \end{columns}
@@ -699,28 +796,38 @@ phases.hubbard_phase_diagram(m, Us, fillings,
 % =====================================================================
 \section{Status and outlook}
 
-\begin{frame}{Honest limits and roadmap}
+\begin{frame}{Roadmap delivered in v0.8, honest limits, next steps}
 \begin{columns}[T]
-\begin{column}{0.48\textwidth}
-\begin{block}{Current limits}
-\footnotesize
+\begin{column}{0.32\textwidth}
+\begin{block}{Delivered (v0.8)}
+\scriptsize
 \begin{itemize}
-\item ED limited by memory: 24-site FCI fine, 36 sites needs a large-memory node
-\item parallel scaling measured on few cores so far; 40-core runs ready via the SLURM template but not yet benchmarked
-\item transport validated against analytic results; no direct Kwant cross-check yet
-\item mean-field diagrams can show convergence artefacts near phase boundaries
+\item DMRG / MPS for 100+ site chains
+\item GPU back-end (CuPy) for $k$-mesh, Kubo, KPM
+\item finite-bias NEGF with self-consistent potential
+\item community registry: reference + benchmark per model
 \end{itemize}
 \end{block}
 \end{column}
-\begin{column}{0.48\textwidth}
-\begin{block}{Roadmap}
-\footnotesize
+\begin{column}{0.32\textwidth}
+\begin{block}{Current limits}
+\scriptsize
 \begin{itemize}
-\item DMRG / tensor networks for larger correlated systems
-\item GPU back-end for $k$-mesh and KPM kernels
-\item non-equilibrium Green's functions with bias
+\item GPU path verified with a NumPy stand-in for CuPy, not yet timed on a real GPU
+\item DMRG without $U(1)$ quantum numbers (sector by penalty or $\mu$)
+\item NEGF electrostatics: local Hartree, not full 3D Poisson
+\item 40-core scaling measured on few cores; no direct Kwant cross-check
+\end{itemize}
+\end{block}
+\end{column}
+\begin{column}{0.32\textwidth}
+\begin{block}{Next}
+\scriptsize
+\begin{itemize}
 \item magnon and exchange models from Wannier90
-\item community model registry with benchmark per model
+\item symmetric (U(1)/SU(2)) DMRG, iDMRG, TDVP time evolution
+\item Poisson solver and inelastic (electron-phonon) NEGF
+\item multi-GPU and GPU sparse transport
 \end{itemize}
 \end{block}
 \end{column}

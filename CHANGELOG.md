@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 (roadmap release)
+* `hf.dmrg`: matrix-product states and two-site DMRG; generic MPO builder with Jordan-Wigner strings; Heisenberg (S = 1/2, 1), AKLT, TFIM, Hubbard, t-V, `from_model`; excited states; correlations, string order, entanglement, central charges.
+* `transport.negf`: finite-bias NEGF with contour-integrated density, self-consistent Hartree potential, parallel I-V, dI/dV, bond currents at bias.
+* `hf.backend`: CuPy GPU back-end for k-mesh diagonalisation, Kubo kernels and KPM.
+* Community model registry: reference + benchmark for every model, `validate`/`validate_all`, entry-point plugins, `community/` folder.
+* 8 new benchmarks (77 total), tutorials 22-24 with quizzes.
+
 ## 0.7.0
 * `hf.macdonald`: models of A. H. MacDonald's group. TMD heterobilayer moiré Hubbard model (Wu et al. PRL 2018), twisted TMD homobilayer topological bands (Wu et al. PRL 2019), generic plane-wave continuum engine with Kubo Chern numbers and tight-binding export, ABC N-layer graphene, graphene QAH, Rashba 2DEG universal spin Hall.
 * 10 new published-result benchmarks (69 total); tutorial 21 and quiz 21.

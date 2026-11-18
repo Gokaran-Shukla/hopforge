@@ -3,8 +3,8 @@
 **A universal tight-binding engine: from 1D chains to 3D crystals and Wannier90 models.**
 
 [![tests](https://github.com/Gokaran-Shukla/hopforge/actions/workflows/tests.yml/badge.svg)](https://github.com/Gokaran-Shukla/hopforge/actions)
-![benchmarks](https://img.shields.io/badge/published%20benchmarks-69%2F69-brightgreen)
-![tutorials](https://img.shields.io/badge/tutorials-21%20notebooks%20%2B%20420%20quiz%20questions-blue)
+![benchmarks](https://img.shields.io/badge/published%20benchmarks-77%2F77-brightgreen)
+![tutorials](https://img.shields.io/badge/tutorials-24%20notebooks%20%2B%20480%20quiz%20questions-blue)
 
 hopforge builds **any** tight-binding Hamiltonian in a few lines: any lattice, orbitals, spin,
 spin-orbit coupling, magnetism, Slater-Koster s/p/d bonding, a k·p model to discretise, or a
@@ -25,10 +25,14 @@ DFT Wannier90 model. Every tool works on all of them:
 | **Quantum phases** | Hubbard phase diagrams vs U and doping (PM/FM/AFM), Stoner criterion, Binder cumulants, fidelity susceptibility, entanglement and central charge, Mott lobes, topological phase maps |
 | **Moiré & orbitronics** | Bistritzer-MacDonald and chiral TBG magic angles; real-space twisted/stacked bilayers with orbital and spin-frame rotation; layer-resolved Kubo-Středa responses; spin-orbit, orbital and self torques (torkance) |
 | **MacDonald-group models** (`hf.macdonald`) | TMD heterobilayer moiré bands → triangular Hubbard model (t₁,t₂,t₃, U₀, exported as a `Model`); twisted MoTe₂ topological bands (Chern numbers, critical angles); ABC N-layer graphene (chiral decomposition, valley Chern N/2); universal spin Hall e/8π; graphene QAH with C = 2; Bistritzer-MacDonald |
+| **DMRG / tensor networks** (`hf.dmrg`) | matrix-product states and two-site DMRG for chains with hundreds of sites; MPOs for any operator string (Jordan-Wigner automatic), Heisenberg/XXZ/J1-J2 (S = 1/2, 1), AKLT, TFIM, Hubbard, t-V, any 1D `Model` + U/V; excited states, correlations, string order, entanglement and central charges |
+| **Finite-bias NEGF** (`transport.negf`) | non-equilibrium density (contour + bias window), self-consistent Hartree potential, I-V curves in parallel, dI/dV, bond currents at bias |
+| **GPU back-end** (`hf.backend`) | `use("cupy")` runs batched k-mesh diagonalisation, Kubo kernels and KPM recursions on an NVIDIA GPU (CuPy); identical results, CPU fallback |
+| **Community registry** | every model has a reference and a benchmark; `hf.models.validate` / `validate_all`; `register_model(..., reference=, benchmark=)`; plugins via the `hopforge.models` entry point; see [`community/`](community/) |
 | **Continuum** | `hf.discretize("k_x**2 + ... sigma_x ...")`: k·p → tight binding |
 | **Parallel** | `n_jobs=40` on any sweep, k-mesh, Wilson loop, disorder average or KPM run; one BLAS thread per worker; SLURM example included |
-| **Validation** | 69 benchmarks against published results ([BENCHMARKS.md](BENCHMARKS.md)) and 121 tests |
-| **Learning** | 21 executed tutorial notebooks (four of them step-by-step "build your own Hamiltonian" walkthroughs), each followed by a 20-question quiz (420 questions) |
+| **Validation** | 77 benchmarks against published results ([BENCHMARKS.md](BENCHMARKS.md)), a benchmark for each of the 36 library models, and 140 tests |
+| **Learning** | 24 executed tutorial notebooks (four of them step-by-step "build your own Hamiltonian" walkthroughs), each followed by a 20-question quiz (480 questions) |
 
 **Overview slides:** [docs/slides/hopforge_overview.pdf](docs/slides/hopforge_overview.pdf) (Beamer, every feature with figures; source in `docs/slides/`).
 
@@ -40,8 +44,8 @@ DFT Wannier90 model. Every tool works on all of them:
 git clone https://github.com/Gokaran-Shukla/hopforge
 cd hopforge
 pip install -e ".[notebooks,test]"
-pytest -q                          # 121 tests
-python -m hopforge.benchmarks -j -1   # 69 published results
+pytest -q                          # 140 tests
+python -m hopforge.benchmarks -j -1   # 77 published results
 ```
 
 ## Quick tour
@@ -138,6 +142,9 @@ with references and deviations is in [BENCHMARKS.md](BENCHMARKS.md). The suite a
 | [19](tutorials/19_step_by_step_interacting_hamiltonians_phase_diagrams.ipynb) | **Step by step:** interacting Hamiltonians: ED, correlations, gaps, spectral functions, doping, U-doping phase diagram, quantum criticality, Mott lobes |
 | [20](tutorials/20_reproduce_research_models_bernevig_vishwanath_sachdev.ipynb) | Reproducing research models: BBH corner charges, FCI, magic-angle TBG, SYK, Ising chain, Kitaev honeycomb |
 | [21](tutorials/21_macdonald_models_moire_tmd_graphene.ipynb) | Allan MacDonald's models: TMD moiré Hubbard parameters, twisted MoTe₂ topology, ABC graphene, universal spin Hall e/8π, graphene QAH |
+| [22](tutorials/22_dmrg_tensor_networks.ipynb) | DMRG: MPOs, 100-site Heisenberg chain, entanglement and central charge, Ising transition, Haldane string order, Hubbard Mott plateau |
+| [23](tutorials/23_finite_bias_negf.ipynb) | Finite-bias NEGF: resonant level, resonant-tunnelling diode with NDR, self-consistent potential, bond currents at bias |
+| [24](tutorials/24_gpu_backend_and_community_registry.ipynb) | GPU back-end; model registry with references and benchmarks; registering and validating your own model |
 
 ```python
 quiz = hf.Quiz(13); quiz.interactive()     # or quiz.show() / quiz.check({1: "a", ...})

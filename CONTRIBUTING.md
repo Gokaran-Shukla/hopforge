@@ -14,18 +14,29 @@ models, methods, tutorials, quiz questions and bug reports are very welcome.
    `.ipynb`, then run `python tools/build_tutorials.py --execute`.
 
 ## Adding a model
+Every model in hopforge carries a **reference** and a **benchmark** (a callable that
+reproduces a published number). See [`community/`](community/) for a worked example.
 ```python
 import hopforge as hf
 
-@hf.models.register_model("my_lattice", dim=2, description="Author et al., PRL (2026)")
+def _benchmark():
+    m = my_lattice()
+    ...
+    return published, value, passed
+
+@hf.models.register_model("my_lattice", dim=2, description="...",
+                          reference="Author et al., PRL (2026)", benchmark=_benchmark,
+                          author="Your Name")
 def my_lattice(t=1.0, lam=0.1):
     lat = hf.Lattice(...)
     m = hf.Model(lat, spinful=True, name="my lattice")
     ...
     return m
+
+hf.models.validate("my_lattice")      # must PASS before a pull request
 ```
-For inclusion in the library, add the function to `src/hopforge/models/library.py`,
-register it in `REGISTRY`, and add a test (e.g. a flat band, a gap, an invariant).
+Put the file in `community/` (or ship it from your own package through the
+`hopforge.models` entry point). `hf.models.validate_all()` runs in CI.
 
 ## Development setup
 ```bash

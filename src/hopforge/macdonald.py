@@ -452,6 +452,7 @@ def sinova_spin_hall(mu=-3.6, alpha=0.1, nk=600, t=1.0, n_jobs=None):
 # make the lattice models available through hf.models.get / list_models
 def _register():
     from .models.library import REGISTRY
+    from .models.registry import META
     for name, f, dim, desc in [
         ("rhombohedral_graphene", rhombohedral_graphene, 2, "ABC N-layer graphene, E ~ k^N (Min & MacDonald 2008)"),
         ("graphene_qah", graphene_qah, 2, "graphene + Rashba + exchange, QAH C = 2 (Tse, Qiao, Yao, MacDonald & Niu 2011)"),
