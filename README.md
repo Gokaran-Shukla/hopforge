@@ -1,5 +1,7 @@
 # hopforge
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24334647.svg)](https://doi.org/10.5281/zenodo.24334647)
+
 **A universal tight-binding engine: from 1D chains to 3D crystals and Wannier90 models.**
 
 [![tests](https://github.com/Gokaran-Shukla/hopforge/actions/workflows/tests.yml/badge.svg)](https://github.com/Gokaran-Shukla/hopforge/actions)
@@ -169,9 +171,25 @@ hopforge's transport layer follows the design of [Kwant](https://kwant-project.o
 include Kwant's MUMPS solver, its arbitrary site-family builders or qsymm, so use Kwant
 itself if you need those.
 
-## Citing
+## Citing hopforge
 
-See [CITATION.cff](CITATION.cff).
+If hopforge helps your work, please cite the software:
+
+> G. Shukla, *hopforge: a universal tight-binding engine for bands, topology, transport and response*, version 0.8.0 (2026). Zenodo. https://doi.org/10.5281/zenodo.24334647
+
+```bibtex
+@software{shukla_hopforge_2026,
+  author    = {Shukla, Gokaran},
+  title     = {hopforge: a universal tight-binding engine for bands, topology, transport and response},
+  version   = {0.8.0},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.24334647},
+  url       = {https://github.com/Gokaran-Shukla/hopforge}
+}
+```
+
+GitHub's **"Cite this repository"** button (from `CITATION.cff`) gives the same reference in APA and BibTeX.
 
 ## License
 
