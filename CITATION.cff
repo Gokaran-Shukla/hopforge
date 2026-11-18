@@ -1,13 +1,34 @@
 cff-version: 1.2.0
-message: "If you use hopforge in your research, please cite it as below."
+message: "If you use hopforge in your work, please cite it as below."
 title: "hopforge: a universal tight-binding engine for bands, topology, transport and response"
+abstract: >-
+  A universal tight-binding engine from 1D chains to 3D crystals and Wannier90 models: any
+  lattice, orbitals, spin, spin-orbit coupling, magnetism, Slater-Koster bonding and
+  discretised k.p models, with more than 40 published models. It computes bands, DOS, ribbons,
+  slabs and flakes; Berry phases, Chern numbers, Wilson loops, Z2 and winding numbers;
+  anomalous, spin and orbital Hall conductivities, Edelstein effects, Berry curvature dipole
+  and orbital magnetisation; Kwant-style quantum transport; KPM and Kubo-Bastin for large
+  systems; surface spectra; mean-field Hubbard, Floquet engineering and exact diagonalisation;
+  and moire and orbitronics tools. It is benchmarked against published results and ships with
+  tutorial notebooks and quizzes.
+type: software
 authors:
   - family-names: Shukla
     given-names: Gokaran
     orcid: "https://orcid.org/0000-0001-9332-3332"
     affiliation: "King Abdullah University of Science and Technology (KAUST)"
+    email: gokaran.shukla@kaust.edu.sa
+repository-code: "https://github.com/Gokaran-Shukla/hopforge"
+license: MIT
 version: 0.8.0
 date-released: 2026-11-17
-license: MIT
-repository-code: "https://github.com/Gokaran-Shukla/hopforge"
-keywords: [tight-binding, topology, quantum transport, Berry curvature, Kubo, KPM, Wannier90, Floquet]
+keywords:
+  - "tight-binding"
+  - "topology"
+  - "Berry curvature"
+  - "quantum transport"
+  - "Kubo formula"
+  - "orbital Hall effect"
+  - "Wannier90"
+  - "Floquet"
+  - "KPM"
