@@ -1,9 +1,8 @@
 # hopforge
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24334647.svg)](https://doi.org/10.5281/zenodo.24334647)
-
 **A universal tight-binding engine: from 1D chains to 3D crystals and Wannier90 models.**
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24334647.svg)](https://doi.org/10.5281/zenodo.24334647)
 [![tests](https://github.com/Gokaran-Shukla/hopforge/actions/workflows/tests.yml/badge.svg)](https://github.com/Gokaran-Shukla/hopforge/actions)
 ![benchmarks](https://img.shields.io/badge/published%20benchmarks-77%2F77-brightgreen)
 ![tutorials](https://img.shields.io/badge/tutorials-24%20notebooks%20%2B%20480%20quiz%20questions-blue)
