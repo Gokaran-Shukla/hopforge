@@ -1724,6 +1724,8 @@ def build(execute=False):
         if execute:
             from nbconvert.preprocessors import ExecutePreprocessor
             ExecutePreprocessor(timeout=900, kernel_name="python3").preprocess(nb, {"metadata": {"path": str(OUT)}})
+        if not any('gs-watermark' in c.source for c in nb.cells):
+            nb.cells.insert(0, nbf.v4.new_markdown_cell("<!-- gs-watermark -->\n> **© 2026 Gokaran Shukla** · part of [hopforge](https://github.com/Gokaran-Shukla/hopforge) · MIT License — any reuse must keep this copyright notice and credit the author."))
         nbf.write(nb, path)
         print("wrote", path)
 

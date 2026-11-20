@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import importlib
 
+_GS_NOTICE = "© 2026 Gokaran Shukla · github.com/Gokaran-Shukla/hopforge · MIT License"  # gs-watermark
+
+
 _MODULES = {
     "01": "q01_lattices", "02": "q02_bands", "03": "q03_geometry", "04": "q04_models",
     "05": "q05_berry_chern", "06": "q06_z2_wilson", "07": "q07_kubo",
@@ -75,6 +78,7 @@ class Quiz:
         """Print all questions (or one, by 1-based number)."""
         qs = range(1, len(self) + 1) if number is None else [number]
         print(f"=== Quiz {self.key}: {self.title} ===\n")
+        print(_GS_NOTICE + "\n")
         for n in qs:
             q, opts, _, _ = self.questions[n - 1]
             print(f"Q{n}. {q}")
