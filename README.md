@@ -1,5 +1,7 @@
 # hopforge
 
+📘 **Complete manual (PDF):** [docs/hopforge_manual.pdf](docs/hopforge_manual.pdf) — documentation, tutorials and quizzes in one file.
+
 **A universal tight-binding engine: from 1D chains to 3D crystals and Wannier90 models.**
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24334647.svg)](https://doi.org/10.5281/zenodo.24334647)
